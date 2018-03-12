@@ -35,6 +35,14 @@
  * functions.
  */
 
+#ifdef OPT_SYNCHPROBS
+int twolocks(int, char **);
+int maths(int, char **);
+int run_producerconsumer(int, char **);
+int run_bar(int, char **);
+#endif
+
+
 
 /*
  * Test code.

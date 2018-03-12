@@ -427,6 +427,22 @@ defoption netfs
 
 ########################################
 #                                      #
+#  Synchronization problems assignment #
+#                                      #
+########################################
+
+defoption synchprobs
+optfile   synchprobs  asst1/twolocks.c
+optfile   synchprobs  asst1/math.c
+optfile   synchprobs  asst1/producerconsumer.c
+optfile   synchprobs  asst1/producerconsumer_driver.c
+optfile   synchprobs  asst1/bar.c
+optfile   synchprobs  asst1/bar_driver.c
+
+
+
+########################################
+#                                      #
 #              Test code               #
 #                                      #
 ########################################

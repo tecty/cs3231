@@ -42,9 +42,10 @@
 #include <vfs.h>
 #include <sfs.h>
 #include <syscall.h>
-#include <test.h>
+#include "opt-synchprobs.h"
 #include "opt-sfs.h"
 #include "opt-net.h"
+#include <test.h>  // potentially depend on opt-* above 
 
 /*
  * In-kernel menu and command dispatcher.
@@ -596,6 +597,12 @@ cmd_testmenu(int n, char **a)
 static const char *mainmenu[] = {
 	"[?o] Operations menu                ",
 	"[?t] Tests menu                     ",
+#if OPT_SYNCHPROBS
+	"[1a] Simple math synchronisation    ",
+	"[1b] Simple deadlock                ",
+	"[1c] Producer/consumer problem      ",
+	"[1d] Bar synchronisation            ",
+#endif
 	"[kh] Kernel heap stats              ",
 	"[khgen] Next kernel heap generation ",
 	"[khdump] Dump kernel heap           ",
@@ -645,6 +652,14 @@ static struct {
 	{ "q",		cmd_quit },
 	{ "exit",	cmd_quit },
 	{ "halt",	cmd_quit },
+
+#if OPT_SYNCHPROBS
+	/* in-kernel synchronization problem(s) */
+	{ "1a",     maths },
+	{ "1b",     twolocks },
+	{ "1c",     run_producerconsumer},
+	{ "1d",     run_bar},
+#endif
 
 	/* stats */
 	{ "kh",         cmd_kheapstats },

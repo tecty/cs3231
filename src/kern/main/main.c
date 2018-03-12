@@ -51,9 +51,6 @@
 #include <version.h>
 #include "autoconf.h"  // for pseudoconfig
 
-/* UNSW hack to avoid compiler warnings for assignment 0 */
-
-extern void complex_hello(void);
 
 /*
  * These two pieces of data are maintained by the makefiles and build system.

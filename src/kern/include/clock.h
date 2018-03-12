@@ -30,6 +30,8 @@
 #ifndef _CLOCK_H_
 #define _CLOCK_H_
 
+#include "opt-synchprobs.h"
+
 /*
  * Time-related definitions.
  */
@@ -43,7 +45,14 @@
  */
 
 /* hardclocks per second */
+#if OPT_SYNCHPROBS
+/* Make synchronization more exciting :) */
+#define HZ  10000
+#else
+/* More realistic value */
 #define HZ  100
+#endif
+
 
 void hardclock_bootstrap(void);
 void hardclock(void);

@@ -5,6 +5,10 @@
         "types.h": "c",
         "bar_driver.h": "c",
         "bar.h": "c",
-        "barglass.h": "c"
+        "barglass.h": "c",
+        "lib.h": "c",
+        "string.h": "c",
+        "thread.h": "c",
+        "stdlib.h": "c"
     }
 }

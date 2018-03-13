@@ -40,7 +40,7 @@ struct semaphore *finished;
  * ADD YOUR OWN VARIABLES HERE AS NEEDED
  * **********************************************************************
  */
-
+struct lock * num_lock;
 
 
 /*
@@ -78,10 +78,17 @@ static void adder(void * unusedpointer, unsigned long addernumber)
                 /* loop doing increments until we achieve the overall number
                    of increments */
 
+                // critical region start::
+                // acquire the lock
+                lock_acquire(num_lock);
+
                 a = counter;
                 if (a < NADDS) {
                         counter = counter + 1;
                         b = counter;
+                        // critical region end ::
+                        // release the lock 
+                        lock_release(num_lock);
 
                         /* count the number of increments we perform  for statistics */
                         adder_counters[addernumber]++;
@@ -92,6 +99,8 @@ static void adder(void * unusedpointer, unsigned long addernumber)
                                         addernumber, a, b) ;
                         }
                 } else {
+                        // critical region end ::(even this thread do nothing)                        
+                        lock_release(num_lock);
                         flag = 0;
                 }
         }
@@ -137,7 +146,10 @@ int maths (int data1, char **data2)
          * INSERT ANY INITIALISATION CODE YOU REQUIRE HERE
          * ********************************************************************
          */
-
+        
+        // create a number lock that use by adder threads
+        num_lock= lock_create("num_lock");
+        
 
         /*
          * Start NADDERS adder() threads.
@@ -182,8 +194,9 @@ int maths (int data1, char **data2)
          * INSERT ANY CLEANUP CODE YOU REQUIRE HERE
          * **********************************************************************
          */
-
-
+        // destory this lock
+        lock_destroy(num_lock);
+        
         /* clean up the semaphore we allocated earlier */
         sem_destroy(finished);
         return 0;

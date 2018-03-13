@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "synch.h": "c",
+        "producerconsumer_driver.h": "c",
+        "types.h": "c",
+        "bar_driver.h": "c",
+        "bar.h": "c",
+        "barglass.h": "c"
+    }
+}

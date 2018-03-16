@@ -19,7 +19,7 @@
 /* Declare any globals you need here (e.g. locks, etc...) */
 //pointers used in the order list
 int hi, lo;
-//lock used for the order list
+//lock used for the entire order list
 struct lock *order_lock;
 //semaphore used for the order list
 struct simaphore *order_sem;
@@ -29,6 +29,31 @@ struct barorder *orders[NCUSTOMERS];
 struct lock *bottle_lock[NBOTTLES];
 //array of semaphores for customers ready to serve
 struct semaphore *customer_sem[NCUSTOMERS];
+
+
+//function for generating appropriate String
+char *get_name(const char *main_name, int count);
+
+char *get_name(const char *main_name, int count) {
+	int str_len = 0;
+	while (main_name[str_len] != '\0') {
+		str_len++;
+	}
+
+	// malloc the return char's space
+	char *ret = kmalloc(str_len * 4 + 12);
+	for (int i = 0; i< str_len; i++) {
+		// strcpy
+		ret[i] = main_name[i];
+	}
+	// get the count to the name
+	ret[str_len] = '0' + count / 10;
+	ret[str_len + 1] = '0' + count % 10;
+	// get the null at the end
+	ret[str_len + 2] = '\0';
+	return ret;
+}
+
 
 /*
  * **********************************************************************
@@ -46,23 +71,25 @@ struct semaphore *customer_sem[NCUSTOMERS];
 
 void order_drink(struct barorder *order)
 {
+	int no; //record the order number
+
 	//decrement the semaphore -> add orders
-	P(order_sem);
+	P(order_sem); //only continue order after the order is COMPLETELY served
+
 	//acquire the lock
 	//Now this customer is making the order, the order list should not be used by anyone else
 	lock_acquire(order_lock);
 	
 	//Now write down the order
 	orders[hi] = order;
+	no = hi;
 	hi = (hi + 1) % NCUSTOMERS;
 
 	//release the order list
 	lock_release(order_lock);
 
 	//block until the drink is ready
-	
-	//some operations .. 
-
+	P(customer_sem[no]);
 	return;
 }
 
@@ -84,14 +111,12 @@ void order_drink(struct barorder *order)
 
 struct barorder *take_order(void)
 {
-	//increment a semaphore -> take orders
-	V(order_sem);
-
 	//acquire the lock
 	//Now the bartender chooses a order to take, no other people should interrupt him ..
 	lock_acquire(order_lock);
     struct barorder *ret = orders[lo];
-	lo = (lo - 1) % NCUSTOMERS;
+	ret->no = lo;
+	lo = (lo - 1) % NCUSTOMERS; 
 	//Now release the order list
 	lock_release(order_lock);
 
@@ -131,8 +156,9 @@ void fill_order(struct barorder *order)
 
 void serve_order(struct barorder *order)
 {
-        (void) order; /* avoid a compiler warning, remove when you
-                         start */
+	V(customer_sem[order->no]);
+	//increment a semaphore -> finish and serve the order
+	V(order_sem);
 }
 
 
@@ -154,6 +180,7 @@ void serve_order(struct barorder *order)
 
 void bar_open(void)
 {
+		int i;
 		//initialize the order list and its relational tools;
 		hi = lo = 0;
 		order_lock = lock_create("order_lock");
@@ -163,13 +190,12 @@ void bar_open(void)
 			panic("sem create failed");
 		}
 		//initialize the locks for all bottles
-		int i;
 		for (i = 0; i < NBOTTLES; i++) {
-			bottle_lock[i] = lock_create(itoa(i));
+			bottle_lock[i] = lock_create(get_name("bottle", i));
 		}
 		//initialize the list of semaphores for customers
 		for (i = 0; i < NCUSTOMERS; i++) {
-			customer_sem[i] = sem_create(itoa)
+			customer_sem[i] = sem_create(get_name("customer", i), 0);
 		}
 
 }

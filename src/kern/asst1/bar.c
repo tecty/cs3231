@@ -16,7 +16,16 @@
  */
 
 /* Declare any globals you need here (e.g. locks, etc...) */
-
+//pointers used in the order list
+int hi, lo;
+//lock used for the order list
+struct lock *order_lock;
+//semaphore used for the order list
+struct simaphore *order_sem;
+//the order list
+struct barorder *orders[NCUSTOMERS];
+//array of locks for recording the status of each bottle
+struct lock bottle_lock[10];
 
 /*
  * **********************************************************************
@@ -34,8 +43,24 @@
 
 void order_drink(struct barorder *order)
 {
-        (void) order; /* Avoid compiler warning, remove when used */
-        panic("You need to write some code!!!!\n");
+	//decrement the semaphore -> add orders
+	P(order_sem);
+	//acquire the lock
+	//Now this customer is making the order, the order list should not be used by anyone else
+	lock_acquire(order_lock);
+	
+	//Now write down the order
+	orders[hi] = order;
+	hi = (hi + 1) % NCUSTOMERS;
+
+	//release the order list
+	lock_release(order_lock);
+
+	//block until the drink is ready
+	
+	//some operations .. 
+
+	return;
 }
 
 
@@ -56,9 +81,18 @@ void order_drink(struct barorder *order)
 
 struct barorder *take_order(void)
 {
-        struct barorder *ret = NULL;
+	//increment a semaphore -> take orders
+	V(order_sem);
 
-        return ret;
+	//acquire the lock
+	//Now the bartender chooses a order to take, no other people should interrupt him ..
+	lock_acquire(order_lock);
+    struct barorder *ret = orders[lo];
+	lo = (lo - 1) % NCUSTOMERS;
+	//Now release the order list
+	lock_release(order_lock);
+
+    return ret;
 }
 
 
@@ -76,11 +110,11 @@ struct barorder *take_order(void)
 void fill_order(struct barorder *order)
 {
 
-        /* add any sync primitives you need to ensure mutual exclusion
-           holds as described */
-
-        /* the call to mix must remain */
-        mix(order);
+    /* add any sync primitives you need to ensure mutual exclusion
+        holds as described */
+	
+    /* the call to mix must remain */
+    mix(order);
 
 }
 
@@ -117,7 +151,19 @@ void serve_order(struct barorder *order)
 
 void bar_open(void)
 {
+		//initialize the order list and its relational tools;
+		hi = lo = 0;
+		order_lock = lock_create("order_lock");
+		KASSERT(order_lock != 0);
+		order_sem = sem_create("order_sem", NCUSTOMERS);
+		if (order_sem == NULL) {
+			panic("sem create failed");
+		}
+		//initialize the locks for all bottles
+		int i;
+		for (int i = 0; i < 10; i++) {
 
+		}
 }
 
 /*

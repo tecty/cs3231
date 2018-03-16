@@ -13,8 +13,9 @@ static struct pc_data buffer[BUFFER_SIZE];
 int hi,lo;
 // lock use by this model
 struct lock *pc_lock;
-// semaphore of the buffer
-struct semaphore * buff_sem ;
+// semaphore of the buffer (empty and full)
+struct semaphore * empty_sem;
+struct semaphore * full_sem;
 
 /* consumer_receive() is called by a consumer to request more data. It
    should block on a sync primitive if no data is available in your
@@ -24,8 +25,8 @@ struct pc_data consumer_receive(void)
 {
         struct pc_data thedata;
 
-        // increment a semaphore
-        V(buff_sem);
+        // wait empty
+		P(empty_sem);
 
         // acquire the lock
         lock_acquire(pc_lock);
@@ -40,6 +41,9 @@ struct pc_data consumer_receive(void)
         // return the lock
         lock_release(pc_lock);
 
+		//enable full
+		V(full_sem);
+
         return thedata;
 }
 
@@ -48,8 +52,8 @@ struct pc_data consumer_receive(void)
 
 void producer_send(struct pc_data item)
 {
-        // decrement the semaphore
-        P(buff_sem);
+        // wait full
+        P(full_sem);
         // acquire the lock
         lock_acquire(pc_lock);
 
@@ -62,6 +66,9 @@ void producer_send(struct pc_data item)
         
         // return the lock
         lock_release(pc_lock);
+
+		// enable empty
+		V(empty_sem);
 }
 
 
@@ -80,10 +87,15 @@ void producerconsumer_startup(void)
 		KASSERT(pc_lock != 0);
 
         //semaphore used to record the storage count
-        buff_sem = sem_create("storage", BUFFER_SIZE);
-		if (buff_sem == NULL) {
+		empty_sem = sem_create("empty_sem", BUFFER_SIZE);
+		if (empty_sem == NULL) {
 			panic("sem create failed");
 		}
+		full_sem = sem_create("full_sem", 0);
+		if (full_sem == NULL) {
+			panic("sem create failed");
+		}
+
 }
 
 /* Perform any clean-up you need here */
@@ -93,6 +105,7 @@ void producerconsumer_shutdown(void)
         lock_destroy(pc_lock);
 
         // destroy semaphore
-        sem_destroy(buff_sem);
+        sem_destroy(empty_sem);
+		sem_destroy(full_sem);
 }
 

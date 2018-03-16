@@ -149,6 +149,7 @@ int maths (int data1, char **data2)
         
         // create a number lock that use by adder threads
         num_lock= lock_create("num_lock");
+		KASSERT(num_lock != 0);
         
 
         /*

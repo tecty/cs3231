@@ -34,7 +34,7 @@ struct pc_data consumer_receive(void)
         thedata.item1 = buffer[lo].item1;
         thedata.item2 = buffer[lo].item2;
 
-        // increatement the state of buffer
+        // increment the state of buffer
         lo = (lo +1) % BUFFER_SIZE;
         
         // return the lock
@@ -57,7 +57,7 @@ void producer_send(struct pc_data item)
         buffer[hi].item1 = item.item1;
         buffer[hi].item2 = item.item2;
         
-        // increatement the state of buffer
+        // increment the state of buffer
         hi = (hi +1) % BUFFER_SIZE;
         
         // return the lock
@@ -77,9 +77,13 @@ void producerconsumer_startup(void)
 
         // create lock use in this model
         pc_lock = lock_create("pc_lock");
+		KASSERT(pc_lock != 0);
 
         //semaphore used to record the storage count
         buff_sem = sem_create("storage", BUFFER_SIZE);
+		if (buff_sem == NULL) {
+			panic("sem create failed");
+		}
 }
 
 /* Perform any clean-up you need here */

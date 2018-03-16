@@ -3,6 +3,7 @@
 #include <synch.h>
 #include <test.h>
 #include <thread.h>
+#include <ctype.h>
 
 #include "bar.h"
 #include "bar_driver.h"
@@ -25,7 +26,9 @@ struct simaphore *order_sem;
 //the order list
 struct barorder *orders[NCUSTOMERS];
 //array of locks for recording the status of each bottle
-struct lock bottle_lock[10];
+struct lock *bottle_lock[NBOTTLES];
+//array of semaphores for customers ready to serve
+struct semaphore *customer_sem[NCUSTOMERS];
 
 /*
  * **********************************************************************
@@ -161,9 +164,14 @@ void bar_open(void)
 		}
 		//initialize the locks for all bottles
 		int i;
-		for (int i = 0; i < 10; i++) {
-
+		for (i = 0; i < NBOTTLES; i++) {
+			bottle_lock[i] = lock_create(itoa(i));
 		}
+		//initialize the list of semaphores for customers
+		for (i = 0; i < NCUSTOMERS; i++) {
+			customer_sem[i] = sem_create(itoa)
+		}
+
 }
 
 /*

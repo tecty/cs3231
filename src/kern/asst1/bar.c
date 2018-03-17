@@ -79,6 +79,7 @@ void order_drink(struct barorder *order)
 	P(full_sem); //if all bartenders are busy, the order will wait
 	lock_acquire(order_lock); //customer modifies the list to add his order
 	// add the order here .. 
+	kprintf("Customer start ordering ..\n");
 	while (orderList[hi] != NULL) {
 		hi = (hi + 1) % NBARTENDERS;
 	}
@@ -113,6 +114,7 @@ struct barorder *take_order(void)
 {
 	P(empty_sem); //if no order provided right now, the bartenders will wait
 	lock_acquire(order_lock);  //bartender modifies the list to take an order
+	kprintf("Bartender start taking orders ..\n");
 	while (orderList[lo] == NULL) {
 		lo = (lo + 1) % NBARTENDERS;
 	}
@@ -142,6 +144,7 @@ void fill_order(struct barorder *order)
 	/* add any sync primitives you need to ensure mutual exclusion
 	holds as described */
 	lock_acquire(carbinet_lock); //only one bartender access the carbinet at one time
+	kprintf("Bartender start filling orders ..\n");
 	while (!mixable(order)) {
 		cv_wait(carbinet_cv,carbinet_lock);
 	}
@@ -192,6 +195,7 @@ int mixable(struct barorder *order) {
 void serve_order(struct barorder *order)
 {
 	//now awake the customer who is waiting for the order
+	kprintf("Bartender start serving orders ..\n");
 	V(waiting_bartender[order->serving_no]);
 	return;
 }
@@ -221,11 +225,11 @@ void bar_open(void)
 		orderList[i] = NULL;
 	}
 	//initialize the two semaphores of the order list
-	empty_sem = sem_create("empty_sem", NBARTENDERS);
+	empty_sem = sem_create("empty_sem", 0);
 	if (empty_sem == NULL) {
 		panic("empty semaphore create failed");
 	}
-	full_sem = sem_create("full_sem", 0);
+	full_sem = sem_create("full_sem", NBARTENDERS);
 	if (full_sem == NULL) {
 		panic("full semaphore create failed");
 	}

@@ -33,6 +33,8 @@ struct bottle bottles[NBOTTLES];
 static int customers;
 static struct lock *cust_lock;
 
+int choose_num = 0;
+
 /* A function used to manage staff leaving */
 
 static void go_home(void);
@@ -77,7 +79,12 @@ static void customer(void *unusedpointer, unsigned long customernum)
                 }
 
                 /* I'll have a beer. */
-                order.requested_bottles[0] = BEER;
+                order.requested_bottles[0] = choose_num%NBOTTLES;
+				choose_num++;
+				order.requested_bottles[1] = choose_num%NBOTTLES;
+				choose_num++;
+				order.requested_bottles[2] = choose_num%NBOTTLES;
+				choose_num++;
 
                 /* order the drink, this blocks until the order is fulfilled */
                 order_drink(&order);

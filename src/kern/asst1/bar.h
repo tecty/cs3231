@@ -10,6 +10,8 @@
  */
 
 char *get_name(const char *main_name, int count);
+int mixable(struct barorder *order);
+void take_bottles(struct barorder *order);
 
 /* struct barorder is the main type referred to in the code. It must
    be preserved as noted for our later testing to work */

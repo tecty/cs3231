@@ -32,8 +32,10 @@ struct semaphore *waiting_bartender[NBARTENDERS];
 struct lock *bottle_lock[NBOTTLES];
 //Permission for opening the wine carbinet
 struct lock *carbinet_lock;
-
-
+//Control variable for managing bottles
+struct cv *carbinet_cv;
+//Array that records which bottle is in used
+int bottle_usage[NBOTTLES];
 
 //function for generating names for semaphores and locks
 char *get_name(const char *main_name, int count) {
@@ -137,15 +139,47 @@ struct barorder *take_order(void)
 
 void fill_order(struct barorder *order)
 {
-
+	int i; //used for looping
 	/* add any sync primitives you need to ensure mutual exclusion
 	holds as described */
-
+	lock_acquire(carbinet_lock); //only one bartender access the carbinet at one time
+	while (!mixable(order)) {
+		cv_wait(carbinet_cv,carbinet_lock);
+	}
+	take_bottles(order);
+	lock_release(carbinet_lock);
 	/* the call to mix must remain */
 	mix(order);
-
+	return_bottles(order);
+	cv_signal(carbinet_cv, carbinet_lock);	
 }
 
+void take_bottles(struct barorder *order) {
+	int i;
+	for (i = 0; i < DRINK_COMPLEXITY; i++) {
+		if (order->requested_bottles[i] != 0) {
+			bottle_usage[order->requested_bottles[i]-1]++;
+		}
+	}
+}
+
+void return_bottles(struct barorder *order) {
+	int i;
+	for (i = 0; i < DRINK_COMPLEXITY; i++) {
+		if (order->requested_bottles[i] != 0) {
+			bottle_usage[order->requested_bottles[i] - 1]--;
+		}
+	}
+}
+
+int mixable(struct barorder *order) {
+	int i;
+	for (i = 0; i < DRINK_COMPLEXITY; i++) {
+		if (order->requested_bottles[i] != 0 && bottle_usage[order->requested_bottles[i] - 1] > 0)
+			return 0; //the bottle required in the order is being used by someone else
+	}
+	return 1; //all the bottles are available for mixing
+}
 
 /*
 * serve_order()
@@ -210,6 +244,12 @@ void bar_open(void)
 	for (i = 0; i < NBOTTLES; i++) {
 		bottle_lock[i] = lock_create(get_name("bottle", i));
 		KASSERT(bottle_lock[i] != 0);
+	}
+	//initialize the control valuable for managing bottles
+	carbinet_cv = cv_create("carbinet_cv");
+	//initialize the usage array of bottles;
+	for (i = 0; i < NBOTTLES; i++) {
+		bottle_usage[i] = 0;
 	}
 }
 

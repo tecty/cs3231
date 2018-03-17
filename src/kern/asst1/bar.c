@@ -23,7 +23,10 @@ struct semaphore *full_sem;
 struct semaphore *empty_sem;
 //Permission for modifying the order list
 struct lock *order_lock;
-int hi, lo; //probably not a good idea ..
+int hi, lo; //queue pointer in the order list
+
+//the semaphore array recording which customer is waiting for which bartender serving the order
+struct semaphore *waiting_bartender[NBARTENDERS];
 
 
 
@@ -45,9 +48,16 @@ void order_drink(struct barorder *order)
 {
 	P(full_sem); //if all bartenders are busy, the order will wait
 	lock_acquire(order_lock); //customer modifies the list to add his order
-		// add the order here .. 
+	// add the order here .. 
+	while (orderList[hi] != NULL) {
+		hi = (hi + 1) % NBARTENDERS;
+	}
+	orderList[hi] = order;
+	hi = (hi + 1) % NBARTENDERS;
 	lock_release(order_lock); //customer finishes adding his order
 	V(empty_sem); //awake any bartender to handle the order if the list was empty
+
+
 }
 
 
@@ -129,6 +139,7 @@ void serve_order(struct barorder *order)
 
 void bar_open(void)
 {
+	int i; //counter for looping
 	//initialize the two semaphores of the order list
 	empty_sem = semaphore_create("empty_sem", NBARTENDERS);
 	if (empty_sem == NULL) {
@@ -141,6 +152,10 @@ void bar_open(void)
 	//initialize the permission lock for modifying the order list
 	order_lock = lock_create("order_lock");
 	KASSERT(order_lock != 0);
+	//initialize the semaphore array for waiting orders
+	for (i = 0; i < NBARTENDERS; i++) {
+		waiting_bartender[i] = semaphore_create("bartender",)
+	}
 
 }
 

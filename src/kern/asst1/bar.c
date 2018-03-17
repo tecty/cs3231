@@ -25,8 +25,36 @@ struct semaphore *empty_sem;
 struct lock *order_lock;
 int hi, lo; //queue pointer in the order list
 
-//the semaphore array recording which customer is waiting for which bartender serving the order
+//Semaphore array recording which customer is waiting for which bartender serving the order
 struct semaphore *waiting_bartender[NBARTENDERS];
+
+//Lock array recording which bottle is in used 
+struct lock *bottle_lock[NBOTTLES];
+//Permission for opening the wine carbinet
+struct lock *carbinet_lock;
+
+
+
+//function for generating names for semaphores and locks
+char *get_name(const char *main_name, int count) {
+	int str_len = 0;
+	while (main_name[str_len] != '\0') {
+		str_len++;
+	}
+
+	// malloc the return char's space
+	char *ret = kmalloc(str_len * 4 + 12);
+	for (int i = 0; i< str_len; i++) {
+		// strcpy
+		ret[i] = main_name[i];
+	}
+	// get the count to the name
+	ret[str_len] = '0' + count / 10;
+	ret[str_len + 1] = '0' + count % 10;
+	// get the null at the end
+	ret[str_len + 2] = '\0';
+	return ret;
+}
 
 
 
@@ -52,12 +80,15 @@ void order_drink(struct barorder *order)
 	while (orderList[hi] != NULL) {
 		hi = (hi + 1) % NBARTENDERS;
 	}
+	order->serving_no = hi;
 	orderList[hi] = order;
 	hi = (hi + 1) % NBARTENDERS;
 	lock_release(order_lock); //customer finishes adding his order
 	V(empty_sem); //awake any bartender to handle the order if the list was empty
 
-
+	//now wait the corresponding bartender to finish the order, then continue
+	P(waiting_bartender[order->serving_no]);
+	return;
 }
 
 
@@ -78,8 +109,17 @@ void order_drink(struct barorder *order)
 
 struct barorder *take_order(void)
 {
-	struct barorder *ret = NULL;
-
+	P(empty_sem); //if no order provided right now, the bartenders will wait
+	lock_acquire(order_lock);  //bartender modifies the list to take an order
+	while (orderList[lo] == NULL) {
+		lo = (lo + 1) % NBARTENDERS;
+	}
+	//take out the order from the list
+	struct barorder *ret = orderList[lo];
+	orderList[lo] = NULL;
+	lo = (lo + 1) % NBARTENDERS;
+	lock_release(order_lock); //bartender finishes taking an order
+	V(full_sem); //awake any customer to continue adding new orders into the list
 	return ret;
 }
 
@@ -140,6 +180,10 @@ void serve_order(struct barorder *order)
 void bar_open(void)
 {
 	int i; //counter for looping
+	//initialize the order list
+	for (i = 0; i < NBARTENDERS; i++) {
+		orderList[i] = NULL;
+	}
 	//initialize the two semaphores of the order list
 	empty_sem = semaphore_create("empty_sem", NBARTENDERS);
 	if (empty_sem == NULL) {
@@ -154,9 +198,19 @@ void bar_open(void)
 	KASSERT(order_lock != 0);
 	//initialize the semaphore array for waiting orders
 	for (i = 0; i < NBARTENDERS; i++) {
-		waiting_bartender[i] = semaphore_create("bartender",)
+		waiting_bartender[i] = semaphore_create(get_name("bartender", i), 0);
+		if (waiting_bartender[i] == NULL) {
+			panic("waiting_bartender semaphore create failed");
+		}
 	}
-
+	//initialize the permission lock for taking out bottles
+	carbinet_lock = lock_create("carbinet_lock");
+	KASSERT(carbinet_lock != 0);
+	//initialize the lock array for bottles
+	for (i = 0; i < NBOTTLES; i++) {
+		bottle_lock[i] = lock_create(get_name("bottle", i));
+		KASSERT(bottle_lock[i] != 0);
+	}
 }
 
 /*

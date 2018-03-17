@@ -9,6 +9,7 @@
  * with the exceptions noted below.
  */
 
+char *get_name(const char *main_name, int count);
 
 /* struct barorder is the main type referred to in the code. It must
    be preserved as noted for our later testing to work */
@@ -19,6 +20,7 @@ struct barorder {
         struct glass glass;                               /* Do not change */
 
         /* This struct can be extended with your own entries below here */ 
+		int serving_no; //use together with waiting_bartender() function
 };
 
 #endif

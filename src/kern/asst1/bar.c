@@ -151,7 +151,7 @@ void fill_order(struct barorder *order)
 	/* the call to mix must remain */
 	mix(order);
 	return_bottles(order);
-	cv_signal(carbinet_cv, carbinet_lock);	
+	cv_signal(carbinet_cv, carbinet_lock);	//not sure if possible
 }
 
 void take_bottles(struct barorder *order) {

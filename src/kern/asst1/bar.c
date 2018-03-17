@@ -139,7 +139,6 @@ struct barorder *take_order(void)
 
 void fill_order(struct barorder *order)
 {
-	int i; //used for looping
 	/* add any sync primitives you need to ensure mutual exclusion
 	holds as described */
 	lock_acquire(carbinet_lock); //only one bartender access the carbinet at one time
@@ -159,6 +158,7 @@ void take_bottles(struct barorder *order) {
 	for (i = 0; i < DRINK_COMPLEXITY; i++) {
 		if (order->requested_bottles[i] != 0) {
 			bottle_usage[order->requested_bottles[i]-1]++;
+			lock_acquire(bottle_lock[order->requested_bottles[i] - 1]);
 		}
 	}
 }
@@ -168,6 +168,7 @@ void return_bottles(struct barorder *order) {
 	for (i = 0; i < DRINK_COMPLEXITY; i++) {
 		if (order->requested_bottles[i] != 0) {
 			bottle_usage[order->requested_bottles[i] - 1]--;
+			lock_release(bottle_lock[order->requested_bottles[i] - 1]);
 		}
 	}
 }
@@ -176,9 +177,9 @@ int mixable(struct barorder *order) {
 	int i;
 	for (i = 0; i < DRINK_COMPLEXITY; i++) {
 		if (order->requested_bottles[i] != 0 && bottle_usage[order->requested_bottles[i] - 1] > 0)
-			return 0; //the bottle required in the order is being used by someone else
+			return 0; //the bottle required in the order is being used by someone else, so this order need to wait
 	}
-	return 1; //all the bottles are available for mixing
+	return 1; //all the bottles are available for mixing, so this order can mix right now
 }
 
 /*
@@ -190,8 +191,9 @@ int mixable(struct barorder *order) {
 
 void serve_order(struct barorder *order)
 {
-	(void)order; /* avoid a compiler warning, remove when you
-				 start */
+	//now awake the customer who is waiting for the order
+	V(waiting_bartender[order->serving_no]);
+	return;
 }
 
 
@@ -219,11 +221,11 @@ void bar_open(void)
 		orderList[i] = NULL;
 	}
 	//initialize the two semaphores of the order list
-	empty_sem = semaphore_create("empty_sem", NBARTENDERS);
+	empty_sem = sem_create("empty_sem", NBARTENDERS);
 	if (empty_sem == NULL) {
 		panic("empty semaphore create failed");
 	}
-	full_sem = semaphore_create("full_sem", 0);
+	full_sem = sem_create("full_sem", 0);
 	if (full_sem == NULL) {
 		panic("full semaphore create failed");
 	}
@@ -232,7 +234,7 @@ void bar_open(void)
 	KASSERT(order_lock != 0);
 	//initialize the semaphore array for waiting orders
 	for (i = 0; i < NBARTENDERS; i++) {
-		waiting_bartender[i] = semaphore_create(get_name("bartender", i), 0);
+		waiting_bartender[i] = sem_create(get_name("bartender", i), 0);
 		if (waiting_bartender[i] == NULL) {
 			panic("waiting_bartender semaphore create failed");
 		}
@@ -262,6 +264,17 @@ void bar_open(void)
 
 void bar_close(void)
 {
-
+	int i; //counter for looping
+	sem_destroy(empty_sem);
+	sem_destroy(full_sem);
+	lock_destroy(order_lock);
+	for (i = 0; i < NBARTENDERS; i++) {
+		sem_destroy(waiting_bartender[i]);
+	}
+	lock_destroy(carbinet_lock);
+	for (i = 0; i < NBOTTLES; i++) {
+		lock_destroy(bottle_lock[i]);
+	}
+	cv_destroy(carbinet_cv);
 }
 

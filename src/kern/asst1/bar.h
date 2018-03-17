@@ -9,10 +9,6 @@
  * with the exceptions noted below.
  */
 
-char *get_name(const char *main_name, int count);
-int mixable(struct barorder *order);
-void take_bottles(struct barorder *order);
-
 /* struct barorder is the main type referred to in the code. It must
    be preserved as noted for our later testing to work */
 
@@ -24,5 +20,11 @@ struct barorder {
         /* This struct can be extended with your own entries below here */ 
 		int serving_no; //use together with waiting_bartender() function
 };
+
+
+char *get_name(const char *main_name, int count);
+int mixable(struct barorder *order);
+void take_bottles(struct barorder *order);
+void return_bottles(struct barorder *order);
 
 #endif

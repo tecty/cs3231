@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "bar_driver.h": "c",
+        "bar.h": "c",
+        "chrono": "c"
+    }
+}

@@ -37,27 +37,6 @@ struct cv *carbinet_cv;
 //Array that records which bottle is in used
 int bottle_usage[NBOTTLES];
 
-//function for generating names for semaphores and locks
-char *get_name(const char *main_name, int count) {
-	int str_len = 0;
-	while (main_name[str_len] != '\0') {
-		str_len++;
-	}
-
-	// malloc the return char's space
-	char *ret = kmalloc(str_len * 4 + 12);
-	for (int i = 0; i< str_len; i++) {
-		// strcpy
-		ret[i] = main_name[i];
-	}
-	// get the count to the name
-	ret[str_len] = '0' + count / 10;
-	ret[str_len + 1] = '0' + count % 10;
-	// get the null at the end
-	ret[str_len + 2] = '\0';
-	return ret;
-}
-
 
 
 /*
@@ -143,47 +122,22 @@ void fill_order(struct barorder *order)
 {
 	/* add any sync primitives you need to ensure mutual exclusion
 	holds as described */
-	lock_acquire(carbinet_lock); //only one bartender access the carbinet at one time
-	kprintf("Bartender start filling orders ..\n");
-	while (!mixable(order)) {
-		cv_wait(carbinet_cv,carbinet_lock);
-	}
-	take_bottles(order);
-	lock_release(carbinet_lock);
+	// lock_acquire(carbinet_lock); //only one bartender access the carbinet at one time
+	// kprintf("Bartender start filling orders ..\n");
+	// while (!mixable(order)) {
+	// 	cv_wait(carbinet_cv,carbinet_lock);
+	// }
+	// lock_release(carbinet_lock);
 	/* the call to mix must remain */
+
+	
+	take_bottles(order);
 	mix(order);
 	return_bottles(order);
-	cv_signal(carbinet_cv, carbinet_lock);	//not sure if possible
+	// cv_signal(carbinet_cv, carbinet_lock);	//not sure if possible
 }
 
-void take_bottles(struct barorder *order) {
-	int i;
-	for (i = 0; i < DRINK_COMPLEXITY; i++) {
-		if (order->requested_bottles[i] != 0) {
-			bottle_usage[order->requested_bottles[i]-1]++;
-			lock_acquire(bottle_lock[order->requested_bottles[i] - 1]);
-		}
-	}
-}
 
-void return_bottles(struct barorder *order) {
-	int i;
-	for (i = 0; i < DRINK_COMPLEXITY; i++) {
-		if (order->requested_bottles[i] != 0) {
-			bottle_usage[order->requested_bottles[i] - 1]--;
-			lock_release(bottle_lock[order->requested_bottles[i] - 1]);
-		}
-	}
-}
-
-int mixable(struct barorder *order) {
-	int i;
-	for (i = 0; i < DRINK_COMPLEXITY; i++) {
-		if (order->requested_bottles[i] != 0 && bottle_usage[order->requested_bottles[i] - 1] > 0)
-			return 0; //the bottle required in the order is being used by someone else, so this order need to wait
-	}
-	return 1; //all the bottles are available for mixing, so this order can mix right now
-}
 
 /*
 * serve_order()
@@ -280,5 +234,81 @@ void bar_close(void)
 		lock_destroy(bottle_lock[i]);
 	}
 	cv_destroy(carbinet_cv);
+}
+
+
+void sort_requested_bottles(struct barorder *order){
+	// simple bubble sort to meet the requirement of convenstion
+	// which is require the bottle by accending order
+	int swap =1;
+
+	// set up the temp value to record bottle id
+	unsigned int tmp_bot;
+
+	while(swap){
+		// reset the flag value
+		swap = 0;
+		for (int i =0 ; i < DRINK_COMPLEXITY -1; i++){
+			if (order->requested_bottles[i] > 
+				order->requested_bottles[i+1]){
+				// swap the bottle require order
+				tmp_bot 						  =
+					order->requested_bottles[i];
+				order->requested_bottles[i] =
+					order->requested_bottles[i+1];
+				order->requested_bottles[i] =
+					tmp_bot;
+			}
+		}
+	}
+}
+
+void take_bottles(struct barorder *order) {
+	int i;
+	for (i = 0; i < DRINK_COMPLEXITY; i++) {
+		if (order->requested_bottles[i] != 0) {
+			bottle_usage[order->requested_bottles[i]-1]++;
+			lock_acquire(bottle_lock[order->requested_bottles[i] - 1]);
+		}
+	}
+}
+
+void return_bottles(struct barorder *order) {
+	int i;
+	for (i = 0; i < DRINK_COMPLEXITY; i++) {
+		if (order->requested_bottles[i] != 0) {
+			bottle_usage[order->requested_bottles[i] - 1]--;
+			lock_release(bottle_lock[order->requested_bottles[i] - 1]);
+		}
+	}
+}
+
+int mixable(struct barorder *order) {
+	int i;
+	for (i = 0; i < DRINK_COMPLEXITY; i++) {
+		if (order->requested_bottles[i] != 0 && bottle_usage[order->requested_bottles[i] - 1] > 0)
+			return 0; //the bottle required in the order is being used by someone else, so this order need to wait
+	}
+	return 1; //all the bottles are available for mixing, so this order can mix right now
+}
+//function for generating names for semaphores and locks
+char *get_name(const char *main_name, int count) {
+	int str_len = 0;
+	while (main_name[str_len] != '\0') {
+		str_len++;
+	}
+
+	// malloc the return char's space
+	char *ret = kmalloc(str_len * 4 + 12);
+	for (int i = 0; i< str_len; i++) {
+		// strcpy
+		ret[i] = main_name[i];
+	}
+	// get the count to the name
+	ret[str_len] = '0' + count / 10;
+	ret[str_len + 1] = '0' + count % 10;
+	// get the null at the end
+	ret[str_len + 2] = '\0';
+	return ret;
 }
 

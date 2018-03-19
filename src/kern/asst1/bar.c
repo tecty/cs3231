@@ -30,10 +30,6 @@ struct semaphore *waiting_bartender[NBARTENDERS];
 
 //Lock array recording which bottle is in used 
 struct lock *bottle_lock[NBOTTLES];
-//Permission for opening the wine carbinet
-struct lock *carbinet_lock;
-//Control variable for managing bottles
-struct cv *carbinet_cv;
 //Array that records which bottle is in used
 int bottle_usage[NBOTTLES];
 
@@ -122,19 +118,15 @@ void fill_order(struct barorder *order)
 {
 	/* add any sync primitives you need to ensure mutual exclusion
 	holds as described */
-	// lock_acquire(carbinet_lock); //only one bartender access the carbinet at one time
 	// kprintf("Bartender start filling orders ..\n");
 	// while (!mixable(order)) {
-	// 	cv_wait(carbinet_cv,carbinet_lock);
 	// }
-	// lock_release(carbinet_lock);
 	/* the call to mix must remain */
 
 	
 	take_bottles(order);
 	mix(order);
 	return_bottles(order);
-	// cv_signal(carbinet_cv, carbinet_lock);	//not sure if possible
 }
 
 
@@ -198,15 +190,12 @@ void bar_open(void)
 		}
 	}
 	//initialize the permission lock for taking out bottles
-	carbinet_lock = lock_create("carbinet_lock");
-	KASSERT(carbinet_lock != 0);
 	//initialize the lock array for bottles
 	for (i = 0; i < NBOTTLES; i++) {
 		bottle_lock[i] = lock_create(get_name("bottle", i));
 		KASSERT(bottle_lock[i] != 0);
 	}
 	//initialize the control valuable for managing bottles
-	carbinet_cv = cv_create("carbinet_cv");
 	//initialize the usage array of bottles;
 	for (i = 0; i < NBOTTLES; i++) {
 		bottle_usage[i] = 0;
@@ -229,11 +218,9 @@ void bar_close(void)
 	for (i = 0; i < NBARTENDERS; i++) {
 		sem_destroy(waiting_bartender[i]);
 	}
-	lock_destroy(carbinet_lock);
 	for (i = 0; i < NBOTTLES; i++) {
 		lock_destroy(bottle_lock[i]);
 	}
-	cv_destroy(carbinet_cv);
 }
 
 

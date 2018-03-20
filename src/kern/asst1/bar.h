@@ -20,7 +20,7 @@ struct barorder {
 
         /* This struct can be extended with your own entries below here */ 
         // which bartender to mix this order.
-        int bartender_id;
+        struct semaphore *wait_drink;
 };
 void sort_requested_bottles(struct barorder *order);
 void take_bottles(struct barorder * this_order);

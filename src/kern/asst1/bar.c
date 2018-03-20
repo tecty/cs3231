@@ -19,7 +19,7 @@
 
 // the siple queue for order
 struct barorder *order_queue[NBARTENDERS];
-int hi, lo;
+int order_hi, order_lo,drink_hi, drink_lo;
 
 // lock for controlling changing queue
 struct lock *order_lock;
@@ -61,11 +61,16 @@ void order_drink(struct barorder *order)
     lock_acquire(order_lock);
 
     // push this order to the queue
-    order_queue[hi] =order;
+    order_queue[order_hi] =order;
+
     // assign this drink to correspond bartender
-    order->bartender_id = hi;
+    // by dequeue the drenk_sem
+    order->wait_drink = drink_sem[drink_lo];
+    // add up the drink lo
+    drink_lo = (drink_lo + 1) % NBARTENDERS; 
+    
     // increament the queue pointer
-    hi  = (hi + 1 )% NBARTENDERS;
+    order_hi  = (order_hi + 1 )% NBARTENDERS;
 
     // CRITICAL REGION END::
     lock_release(order_lock);
@@ -74,7 +79,7 @@ void order_drink(struct barorder *order)
     V(empty_sem);
     
     // waiting that bartender to finish the drink
-    P(drink_sem[hi]);
+    P(order->wait_drink);
 }
 
 
@@ -97,8 +102,6 @@ struct barorder *take_order(void)
 {
     struct barorder *ret = NULL;
 
-	// kprintf("Bartender start taking orders ..\n");
-
 
     // Sleep until customer order a drink 
     P(empty_sem);
@@ -107,14 +110,13 @@ struct barorder *take_order(void)
     lock_acquire(order_lock);
 
     // dequeue the order queue
-    ret = order_queue[lo];
-    lo = (lo +1) % NBARTENDERS;
+    ret = order_queue[order_lo];
+    order_lo = (order_lo +1) % NBARTENDERS;
 
     // CRITICAL REGION END::
     lock_release(order_lock);
 
-    // Some bartender can take order
-    V(full_sem);
+
 
     return ret;
 }
@@ -162,15 +164,25 @@ void fill_order(struct barorder *order)
 
 void serve_order(struct barorder *order)
 {
-    // kprintf("Bartender start serving orders ..\n");
 
+    // CRITICAL REGION:: Changing the counter of drink queue
+    lock_acquire(order_lock);
 
-    // bartender release the drink so the customer can drink it
-    V(
-        drink_sem[
-            order->bartender_id
-        ]
-    );
+    // push drink queue by return the sem to drink_sem
+    drink_sem[drink_hi] = order->wait_drink;
+    
+    // add up the counter of the drink queue
+    drink_hi = (drink_hi + 1) % NBARTENDERS; 
+
+    // wake up customer to enjoy the drink 
+    // and this semaphore might be used by another customer
+    V(order->wait_drink);
+
+    // CRITICAL REGION END::
+    lock_release(order_lock);
+
+    // Some bartender can take order
+    V(full_sem);
     
 }
 
@@ -195,9 +207,15 @@ void bar_open(void)
 {
     // counter for looping
     int i;
+    // tmp value to prevent memleak
+    char *tmp_str ;
 
-    // initial the order list by reset hi and lo
-    hi = lo = 0;
+    // initial the order queue by reset order_hi and order_lo
+    order_hi = order_lo = 0;
+    // initial the drink sem queue by reset the drink_hi and drink_lo
+    // Note: the inital queue is full of semaphore.
+    drink_lo = drink_hi = 0;
+
     // continue: create order lock for order list
     order_lock = lock_create("order_lock");
     // continue: create semaphore for consumer/ producer
@@ -206,12 +224,16 @@ void bar_open(void)
 
     // initial the drink lock array to wait the mix is done
     for(i =0; i< NBARTENDERS; i ++){
-        drink_sem[i] = sem_create(get_name("drink_sem",i),0);
+        tmp_str = get_name("drink_sem",i);
+        drink_sem[i] = sem_create(tmp_str,0);
+        kfree(tmp_str);
     }
 
     // initial the bottle lock array
     for(i=0; i < NBOTTLES; i++){
-        bottle_lock[i] = lock_create(get_name("bottle_lock",i));
+        tmp_str = get_name("bottle_lock",i);
+        bottle_lock[i] = lock_create(tmp_str);
+        kfree(tmp_str);
     }
 
 }
@@ -271,8 +293,9 @@ void sort_requested_bottles(struct barorder *order){
 					order->requested_bottles[i];
 				order->requested_bottles[i] =
 					order->requested_bottles[i+1];
-				order->requested_bottles[i] =
+				order->requested_bottles[i+1] =
 					tmp_bot;
+                swap = 1;
 			}
 		}
 	}

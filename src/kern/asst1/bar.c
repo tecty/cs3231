@@ -321,7 +321,8 @@ void take_bottles(struct barorder * this_order){
 void return_bottles(struct barorder * this_order){
     // counter for the loop
     int i;
-    for(i=0; i < DRINK_COMPLEXITY; i ++){
+    for(i=DRINK_COMPLEXITY -1; i >= 0; i --){
+        // must use reverse order to release the lock
         if(this_order->requested_bottles[i]){
             // bartender return those bottles
             lock_release(

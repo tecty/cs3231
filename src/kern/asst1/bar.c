@@ -17,6 +17,24 @@
 
 /* Declare any globals you need here (e.g. locks, etc...) */
 
+// the siple queue for order
+struct barorder *order_queue[NBARTENDERS];
+int hi, lo;
+
+// lock for controlling changing queue
+struct lock *order_lock;
+// semaphore for consumer/ producer model of order list
+struct semaphore *full_sem;
+struct semaphore *empty_sem;
+
+// lock array for custumer to wait for bartender to mix the drink
+struct semaphore *drink_sem[NBARTENDERS];
+
+// lock for bartender to require bottle
+struct lock *bottle_lock[NBOTTLES];
+
+
+
 
 /*
  * **********************************************************************
@@ -34,8 +52,29 @@
 
 void order_drink(struct barorder *order)
 {
-        (void) order; /* Avoid compiler warning, remove when used */
-        panic("You need to write some code!!!!\n");
+	// kprintf("Customer start ordering ..\n");
+
+    // wait if the order list is already full
+    P(full_sem);
+
+    // CRITICAL REGION:: changing and reading order list
+    lock_acquire(order_lock);
+
+    // push this order to the queue
+    order_queue[hi] =order;
+    // assign this drink to correspond bartender
+    order->bartender_id = hi;
+    // increament the queue pointer
+    hi  = (hi + 1 )% NBARTENDERS;
+
+    // CRITICAL REGION END::
+    lock_release(order_lock);
+
+    // wake up any sleeping bartender to do this drink
+    V(empty_sem);
+    
+    // waiting that bartender to finish the drink
+    P(drink_sem[hi]);
 }
 
 
@@ -56,9 +95,28 @@ void order_drink(struct barorder *order)
 
 struct barorder *take_order(void)
 {
-        struct barorder *ret = NULL;
+    struct barorder *ret = NULL;
 
-        return ret;
+	// kprintf("Bartender start taking orders ..\n");
+
+
+    // Sleep until customer order a drink 
+    P(empty_sem);
+
+    // CRITICAL REGION:: Changing and reading order list
+    lock_acquire(order_lock);
+
+    // dequeue the order queue
+    ret = order_queue[lo];
+    lo = (lo +1) % NBARTENDERS;
+
+    // CRITICAL REGION END::
+    lock_release(order_lock);
+
+    // Some bartender can take order
+    V(full_sem);
+
+    return ret;
 }
 
 
@@ -76,11 +134,21 @@ struct barorder *take_order(void)
 void fill_order(struct barorder *order)
 {
 
-        /* add any sync primitives you need to ensure mutual exclusion
-           holds as described */
+    /* add any sync primitives you need to ensure mutual exclusion
+        holds as described */
+    
+    // sort the request order that meet the require of convension 
+    // of takeing out bottle by same order (ascending order)
+    sort_requested_bottles(order);
 
-        /* the call to mix must remain */
-        mix(order);
+    // take the bottle form the carbinet
+    take_bottles(order);
+
+    /* the call to mix must remain */
+    mix(order);
+
+    // return the bottle to the carbinet
+    return_bottles(order);
 
 }
 
@@ -94,8 +162,16 @@ void fill_order(struct barorder *order)
 
 void serve_order(struct barorder *order)
 {
-        (void) order; /* avoid a compiler warning, remove when you
-                         start */
+    // kprintf("Bartender start serving orders ..\n");
+
+
+    // bartender release the drink so the customer can drink it
+    V(
+        drink_sem[
+            order->bartender_id
+        ]
+    );
+    
 }
 
 
@@ -117,6 +193,26 @@ void serve_order(struct barorder *order)
 
 void bar_open(void)
 {
+    // counter for looping
+    int i;
+
+    // initial the order list by reset hi and lo
+    hi = lo = 0;
+    // continue: create order lock for order list
+    order_lock = lock_create("order_lock");
+    // continue: create semaphore for consumer/ producer
+    full_sem  = sem_create("order_full",NBARTENDERS);
+    empty_sem = sem_create("order_empty",0);
+
+    // initial the drink lock array to wait the mix is done
+    for(i =0; i< NBARTENDERS; i ++){
+        drink_sem[i] = sem_create(get_name("drink_sem",i),0);
+    }
+
+    // initial the bottle lock array
+    for(i=0; i < NBOTTLES; i++){
+        bottle_lock[i] = lock_create(get_name("bottle_lock",i));
+    }
 
 }
 
@@ -129,6 +225,109 @@ void bar_open(void)
 
 void bar_close(void)
 {
+    // counter for the loop
+    int i = 0;
+    
+    // destory the semaphore and lock use by order control
+    lock_destroy(order_lock);
+    sem_destroy(full_sem);
+    sem_destroy(empty_sem);
+
+
+    // destory the drink lock array to wait the mix is done
+    for(i =0; i< NBARTENDERS; i ++){
+        sem_destroy(drink_sem[i]);
+    }
+
+    // destory the bottle lock array
+    for(i=0; i < NBOTTLES; i++){
+        lock_destroy(bottle_lock[i]);
+    }
 
 }
 
+/*
+ * **********************************************************************
+ * HELPER FUNCTION AREA
+ * **********************************************************************
+ */
+
+void sort_requested_bottles(struct barorder *order){
+	// simple bubble sort to meet the requirement of convenstion
+	// which is require the bottle by accending order
+	int swap =1;
+
+	// set up the temp value to record bottle id
+	unsigned int tmp_bot;
+
+	while(swap){
+		// reset the flag value
+		swap = 0;
+		for (int i =0 ; i < DRINK_COMPLEXITY -1; i++){
+			if (order->requested_bottles[i] > 
+				order->requested_bottles[i+1]){
+				// swap the bottle require order
+				tmp_bot 						  =
+					order->requested_bottles[i];
+				order->requested_bottles[i] =
+					order->requested_bottles[i+1];
+				order->requested_bottles[i] =
+					tmp_bot;
+			}
+		}
+	}
+}
+
+
+void take_bottles(struct barorder * this_order){
+    // counter for the loop
+    int i;
+    for(i=0; i < DRINK_COMPLEXITY; i ++){
+        if(this_order->requested_bottles[i]){
+
+            // get the bottle for bartender
+            lock_acquire(
+                bottle_lock[
+                    this_order->requested_bottles[i]-1
+                ]
+            );
+        }
+    }
+
+}
+void return_bottles(struct barorder * this_order){
+    // counter for the loop
+    int i;
+    for(i=0; i < DRINK_COMPLEXITY; i ++){
+        if(this_order->requested_bottles[i]){
+            // bartender return those bottles
+            lock_release(
+                bottle_lock[
+                    this_order->requested_bottles[i]-1
+                ]
+            );
+        }
+    }
+
+}
+
+//function for generating names for semaphores and locks
+char *get_name(const char *main_name, int count) {
+	int str_len = 0;
+	while (main_name[str_len] != '\0') {
+		str_len++;
+	}
+
+	// malloc the return char's space
+	char *ret = kmalloc(str_len * 4 + 12);
+	for (int i = 0; i< str_len; i++) {
+		// strcpy
+		ret[i] = main_name[i];
+	}
+	// get the count to the name
+	ret[str_len] = '0' + count / 10;
+	ret[str_len + 1] = '0' + count % 10;
+	// get the null at the end
+	ret[str_len + 2] = '\0';
+	return ret;
+}

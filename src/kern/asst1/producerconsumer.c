@@ -1,6 +1,9 @@
 /* This file will contain your solution. Modify it as you wish. */
 #include <types.h>
 #include <synch.h>
+#include <lib.h>
+#include <test.h>
+#include <thread.h>
 #include "producerconsumer_driver.h"
 
 /* Declare any variables you need here to keep track of and

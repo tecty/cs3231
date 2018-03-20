@@ -54,7 +54,7 @@ void order_drink(struct barorder *order)
 	P(full_sem); //if all bartenders are busy, the order will wait
 	lock_acquire(order_lock); //customer modifies the list to add his order
 	// add the order here .. 
-	kprintf("Customer start ordering ..\n");
+	// kprintf("Customer start ordering ..\n");
 	while (orderList[hi] != NULL) {
 		hi = (hi + 1) % NBARTENDERS;
 	}
@@ -89,7 +89,7 @@ struct barorder *take_order(void)
 {
 	P(empty_sem); //if no order provided right now, the bartenders will wait
 	lock_acquire(order_lock);  //bartender modifies the list to take an order
-	kprintf("Bartender start taking orders ..\n");
+	// kprintf("Bartender start taking orders ..\n");
 	while (orderList[lo] == NULL) {
 		lo = (lo + 1) % NBARTENDERS;
 	}
@@ -123,8 +123,13 @@ void fill_order(struct barorder *order)
 	// }
 	/* the call to mix must remain */
 
-	
+	sort_requested_bottles(order);
+
 	take_bottles(order);
+	// kprintf("-----\n");
+	// for(int i = 0; i< DRINK_COMPLEXITY; i++){
+	// 	kprintf("i'm takeing %u\n", order->requested_bottles[i]);
+	// }
 	mix(order);
 	return_bottles(order);
 }
@@ -141,7 +146,7 @@ void fill_order(struct barorder *order)
 void serve_order(struct barorder *order)
 {
 	//now awake the customer who is waiting for the order
-	kprintf("Bartender start serving orders ..\n");
+	// kprintf("Bartender start serving orders ..\n");
 	V(waiting_bartender[order->serving_no]);
 	return;
 }
@@ -165,7 +170,12 @@ void serve_order(struct barorder *order)
 
 void bar_open(void)
 {
-	int i; //counter for looping
+	//counter for looping
+	int i; 
+
+	// temp string for locks' and semaphore name
+	char *tmp_str;
+
 	//initialize the order list
 	for (i = 0; i < NBARTENDERS; i++) {
 		orderList[i] = NULL;
@@ -184,7 +194,12 @@ void bar_open(void)
 	KASSERT(order_lock != 0);
 	//initialize the semaphore array for waiting orders
 	for (i = 0; i < NBARTENDERS; i++) {
-		waiting_bartender[i] = sem_create(get_name("bartender", i), 0);
+
+		tmp_str = get_name("bartender", i);
+		waiting_bartender[i] = sem_create(tmp_str, 0);
+		kfree(tmp_str);
+
+		
 		if (waiting_bartender[i] == NULL) {
 			panic("waiting_bartender semaphore create failed");
 		}
@@ -192,7 +207,10 @@ void bar_open(void)
 	//initialize the permission lock for taking out bottles
 	//initialize the lock array for bottles
 	for (i = 0; i < NBOTTLES; i++) {
-		bottle_lock[i] = lock_create(get_name("bottle", i));
+		tmp_str = get_name("bottle", i);
+		bottle_lock[i] = lock_create(tmp_str);
+		kfree(tmp_str);
+
 		KASSERT(bottle_lock[i] != 0);
 	}
 	//initialize the control valuable for managing bottles

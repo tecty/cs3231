@@ -26,5 +26,6 @@ void sort_requested_bottles(struct barorder *order);
 void take_bottles(struct barorder * this_order);
 void return_bottles(struct barorder * this_order);
 char *get_name(const char *main_name, int count) ;
+int mixable(struct barorder * order);
 
 #endif

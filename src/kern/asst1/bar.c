@@ -30,8 +30,12 @@ struct semaphore *empty_sem;
 // lock array for custumer to wait for bartender to mix the drink
 struct semaphore *drink_sem[NBARTENDERS];
 
-// lock for bartender to require bottle
-struct lock *bottle_lock[NBOTTLES];
+// lock for permission to access bottles
+struct lock *carbinet_lock;
+// usage for each bottle
+int bottle_usage[NBOTTLES];
+// condition variable for waiting permission
+struct cv *carbinet_cv;
 
 
 
@@ -141,17 +145,26 @@ void fill_order(struct barorder *order)
     
     // sort the request order that meet the require of convension 
     // of takeing out bottle by same order (ascending order)
-    sort_requested_bottles(order);
+    // sort_requested_bottles(order);
 
-    // take the bottle form the carbinet
+    // // take the bottle form the carbinet
+    // take_bottles(order);
+
+    // /* the call to mix must remain */
+    // mix(order);
+
+    // // return the bottle to the carbinet
+    // return_bottles(order);
+
+    lock_acquire(carbinet_lock);
+    while(!mixable(order)){
+        cv_wait(carbinet_cv, carbinet_lock);
+    }
     take_bottles(order);
-
-    /* the call to mix must remain */
+    lock_release(carbinet_lock);
     mix(order);
-
-    // return the bottle to the carbinet
     return_bottles(order);
-
+    cv_signal(carbinet_cv, carbinet_lock);
 }
 
 
@@ -218,6 +231,10 @@ void bar_open(void)
 
     // continue: create order lock for order list
     order_lock = lock_create("order_lock");
+    // continue: create carbinet lock 
+    carbinet_lock = lock_create("carbinet_lock");
+    // continue: create carbinet cv
+    carbinet_cv = cv_create("carbinet_cv");
     // continue: create semaphore for consumer/ producer
     full_sem  = sem_create("order_full",NBARTENDERS);
     empty_sem = sem_create("order_empty",0);
@@ -229,13 +246,11 @@ void bar_open(void)
         kfree(tmp_str);
     }
 
-    // initial the bottle lock array
-    for(i=0; i < NBOTTLES; i++){
-        tmp_str = get_name("bottle_lock",i);
-        bottle_lock[i] = lock_create(tmp_str);
-        kfree(tmp_str);
+    // initial the current usage of each bottle
+    for(i=0;i<NBOTTLES;i++){
+        //0 means the bottle is not in use, 1 means the bottle is now in use
+        bottle_usage[i] = 0;
     }
-
 }
 
 /*
@@ -254,17 +269,20 @@ void bar_close(void)
     lock_destroy(order_lock);
     sem_destroy(full_sem);
     sem_destroy(empty_sem);
-
+    lock_destroy(carbinet_lock);
 
     // destory the drink lock array to wait the mix is done
     for(i =0; i< NBARTENDERS; i ++){
         sem_destroy(drink_sem[i]);
     }
 
-    // destory the bottle lock array
-    for(i=0; i < NBOTTLES; i++){
-        lock_destroy(bottle_lock[i]);
-    }
+    // destory the conditional varible of cv.
+    cv_destroy(carbinet_cv);
+
+    // // destory the bottle lock array
+    // for(i=0; i < NBOTTLES; i++){
+    //     lock_destroy(bottle_lock[i]);
+    // }
 
 }
 
@@ -307,13 +325,9 @@ void take_bottles(struct barorder * this_order){
     int i;
     for(i=0; i < DRINK_COMPLEXITY; i ++){
         if(this_order->requested_bottles[i]){
-
-            // get the bottle for bartender
-            lock_acquire(
-                bottle_lock[
-                    this_order->requested_bottles[i]-1
-                ]
-            );
+            bottle_usage[
+                this_order->requested_bottles[i]-1
+            ] = 1;
         }
     }
 
@@ -324,12 +338,9 @@ void return_bottles(struct barorder * this_order){
     for(i=DRINK_COMPLEXITY -1; i >= 0; i --){
         // must use reverse order to release the lock
         if(this_order->requested_bottles[i]){
-            // bartender return those bottles
-            lock_release(
-                bottle_lock[
-                    this_order->requested_bottles[i]-1
-                ]
-            );
+            bottle_usage[
+                this_order->requested_bottles[i]-1
+            ] = 0;
         }
     }
 
@@ -354,4 +365,13 @@ char *get_name(const char *main_name, int count) {
 	// get the null at the end
 	ret[str_len + 2] = '\0';
 	return ret;
+}
+
+int mixable(struct barorder *order) {
+	int i;
+	for (i = 0; i < DRINK_COMPLEXITY; i++) {
+		if (order->requested_bottles[i] != 0 && bottle_usage[order->requested_bottles[i] - 1] > 0)
+			return 0; //the bottle required in the order is being used by someone else, so this order need to wait
+	}
+	return 1; //all the bottles are available for mixing, so this order can mix right now
 }

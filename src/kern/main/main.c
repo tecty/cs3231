@@ -96,15 +96,15 @@ boot(void)
 	 * dev/generic/console.c).
 	 */
 
-	kprintf("\n");
-	kprintf("OS/161 base system version %s\n", BASE_VERSION);
-	kprintf("(with locks&CVs solution)\n");
-	kprintf("%s", harvard_copyright);
-	kprintf("\n");
-
-	kprintf("Put-your-group-name-here's system version %s (%s #%d)\n",
-		GROUP_VERSION, buildconfig, buildversion);
-	kprintf("\n");
+	// kprintf("\n");
+	// kprintf("OS/161 base system version %s\n", BASE_VERSION);
+	// kprintf("(with locks&CVs solution)\n");
+	// kprintf("%s", harvard_copyright);
+	// kprintf("\n");
+  //
+	// kprintf("Put-your-group-name-here's system version %s (%s #%d)\n",
+	// 	GROUP_VERSION, buildconfig, buildversion);
+	// kprintf("\n");
 
 	/* Early initialization. */
 	ram_bootstrap();
@@ -115,7 +115,7 @@ boot(void)
 	kheap_nextgeneration();
 
 	/* Probe and initialize devices. Interrupts should come on. */
-	kprintf("Device probe...\n");
+	// kprintf("Device probe...\n");
 	KASSERT(curthread->t_curspl > 0);
 	mainbus_bootstrap();
 	KASSERT(curthread->t_curspl == 0);
@@ -126,7 +126,7 @@ boot(void)
 
 	/* Late phase of initialization. */
 	vm_bootstrap();
-	kprintf_bootstrap();
+	// kprintf_bootstrap();
 	thread_start_cpus();
 
 	/* Default bootfs - but ignore failure, in case emu0 doesn't exist */
@@ -149,7 +149,7 @@ void
 shutdown(void)
 {
 
-	kprintf("Shutting down.\n");
+	// kprintf("Shutting down.\n");
 
 	vfs_clearbootfs();
 	vfs_clearcurdir();

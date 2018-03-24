@@ -92,6 +92,20 @@ static void customer(void *unusedpointer, unsigned long customernum)
 
                 /* Drink up */
                 for (j = 0; j < DRINK_COMPLEXITY; j++) {
+                        if(order.requested_bottles[j]!= order.glass.contents[j]){
+                                kprintf("C %ld has glass %d, %d, %d\n",
+                                customernum,
+                                order.glass.contents[0],
+                                order.glass.contents[1],
+                                order.glass.contents[2]);
+                                kprintf("But I ordered %d, %d, %d\n",
+                                        order.requested_bottles[0],
+                                        order.requested_bottles[1],
+                                        order.requested_bottles[2]
+                                );
+                                panic("i didn't get wat i want!\n");
+
+                        }
                         order.glass.contents[j] = 0;
                 }
 
@@ -292,13 +306,21 @@ void mix(struct barorder *order)
          * add drinks to the glass in order given and increment number of
          * doses from particular bottle
          */
-
+        // kprintf("the order is %d,%d,%d\n",
+        //         order->requested_bottles[0],
+        //         order->requested_bottles[1],
+        //         order->requested_bottles[2]);
         for (i = 0; i < DRINK_COMPLEXITY; i++){
                 int bottle;
                 bottle = order->requested_bottles[i];
                 order->glass.contents[i] = bottle;
 
                 if (bottle > NBOTTLES) {
+                        kprintf("unkown of %d,in i = %d\n",bottle,i);
+                        kprintf("the error order is %d,%d,%d\n",
+                                order->requested_bottles[0],
+                                order->requested_bottles[1],
+                                order->requested_bottles[2]);
                         panic("Unknown bottle");
                 }
                 if (bottle > 0) {

@@ -304,16 +304,32 @@ void sort_requested_bottles(struct barorder *order){
 
 void take_bottles(struct barorder * this_order){
     // counter for the loop
-    int i;
+    int i,j;
+    // reset the index of bottle_lock
+    j = 0;
     for(i=0; i < DRINK_COMPLEXITY; i ++){
-        if(this_order->requested_bottles[i]){
+        // clean up the bottle hold by previous order
+        this_order ->hold_bottle[i] = NULL;
 
-            // get the bottle for bartender
-            lock_acquire(
-                bottle_lock[
-                    this_order->requested_bottles[i]-1
-                ]
-            );
+
+        /**
+         * request bottle is not 0
+         * then requeset the drink which is not require before 
+         */
+        if(this_order->requested_bottles[i]
+            && ( i== 0 || 
+            this_order->requested_bottles[i]!= this_order->requested_bottles[i-1] 
+            )
+        ){
+            // only the not duplicate lock can be acquire
+            this_order->hold_bottle[j] 
+                = bottle_lock[this_order->requested_bottles[i]-1]; 
+            // take this lock from carbinet
+            lock_acquire(this_order->hold_bottle[j]);
+
+            // add up the counter for hold_bottle
+            j++;
+
         }
     }
 
@@ -322,15 +338,12 @@ void return_bottles(struct barorder * this_order){
     // counter for the loop
     int i;
     for(i=DRINK_COMPLEXITY -1; i >= 0; i --){
-        // must use reverse order to release the lock
-        if(this_order->requested_bottles[i]){
-            // bartender return those bottles
-            lock_release(
-                bottle_lock[
-                    this_order->requested_bottles[i]-1
-                ]
-            );
+        // release the bottle by reverse order
+        if(this_order->hold_bottle[i]!= NULL){
+            // release used bottle
+            lock_release(this_order->hold_bottle[i]);
         }
+        
     }
 
 }

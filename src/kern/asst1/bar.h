@@ -19,7 +19,15 @@ struct barorder {
         struct glass glass;                               /* Do not change */
 
         /* This struct can be extended with your own entries below here */ 
+        // which bartender to mix this order.
+        struct semaphore *wait_drink;
 
+        // held bottles which needed to complete this order
+        struct lock *hold_bottle[DRINK_COMPLEXITY];
 };
+void sort_requested_bottles(struct barorder *order);
+void take_bottles(struct barorder * this_order);
+void return_bottles(struct barorder * this_order);
+char *get_name(const char *main_name, int count) ;
 
 #endif

@@ -16,7 +16,6 @@
  */
 
 /* #define PRINT_ON */
-
 /* this semaphore is for cleaning up at the end. */
 static struct semaphore *alldone;
 
@@ -32,6 +31,10 @@ struct bottle bottles[NBOTTLES];
 
 static int customers;
 static struct lock *cust_lock;
+
+int choose_num = 0;
+
+struct lock * choose_num_lock;
 
 /* A function used to manage staff leaving */
 
@@ -76,8 +79,15 @@ static void customer(void *unusedpointer, unsigned long customernum)
                         order.requested_bottles[j] = 0;
                 }
 
+                lock_acquire(choose_num_lock);
                 /* I'll have a beer. */
-                order.requested_bottles[0] = BEER;
+                order.requested_bottles[0] = 1;
+                choose_num++;
+                order.requested_bottles[1] = 1;
+                choose_num++;
+                order.requested_bottles[2] = 2;
+                choose_num++;
+                lock_release(choose_num_lock);
 
                 /* order the drink, this blocks until the order is fulfilled */
                 order_drink(&order);
@@ -92,20 +102,6 @@ static void customer(void *unusedpointer, unsigned long customernum)
 
                 /* Drink up */
                 for (j = 0; j < DRINK_COMPLEXITY; j++) {
-                        if(order.requested_bottles[j]!= order.glass.contents[j]){
-                                kprintf("C %ld has glass %d, %d, %d\n",
-                                customernum,
-                                order.glass.contents[0],
-                                order.glass.contents[1],
-                                order.glass.contents[2]);
-                                kprintf("But I ordered %d, %d, %d\n",
-                                        order.requested_bottles[0],
-                                        order.requested_bottles[1],
-                                        order.requested_bottles[2]
-                                );
-                                panic("i didn't get wat i want!\n");
-
-                        }
                         order.glass.contents[j] = 0;
                 }
 
@@ -162,7 +158,7 @@ static void bartender(void *unusedpointer, unsigned long staff)
                 if (order->go_home_flag == 0) {
 
 #ifdef PRINT_ON
-                        kprintf("S %ld filling\n", staff);
+                        kprintf("S %ld filling.\n", staff) ;
 #endif
 
 
@@ -209,6 +205,10 @@ int run_bar(int nargs, char **args)
 
         (void) nargs; /* avoid compiler warnings */
         (void) args;
+
+        // create a lock for choose numm
+        choose_num_lock= lock_create("choose_num_lock");
+
 
         /* this semaphore indicates everybody has gone home */
         alldone = sem_create("alldone", 0);
@@ -271,6 +271,9 @@ int run_bar(int nargs, char **args)
          */
         bar_close();
 
+        // destory the lock for choose numm
+        lock_destroy(choose_num_lock);
+
         lock_destroy(cust_lock);
         sem_destroy(alldone);
         kprintf("The bar is closed, bye!!!\n");
@@ -306,21 +309,13 @@ void mix(struct barorder *order)
          * add drinks to the glass in order given and increment number of
          * doses from particular bottle
          */
-        // kprintf("the order is %d,%d,%d\n",
-        //         order->requested_bottles[0],
-        //         order->requested_bottles[1],
-        //         order->requested_bottles[2]);
+
         for (i = 0; i < DRINK_COMPLEXITY; i++){
                 int bottle;
                 bottle = order->requested_bottles[i];
                 order->glass.contents[i] = bottle;
 
-                if (bottle > NBOTTLES || bottle < 0) {
-                        kprintf("unkown of %d,in i = %d\n",bottle,i);
-                        kprintf("the error order is %d,%d,%d\n",
-                                order->requested_bottles[0],
-                                order->requested_bottles[1],
-                                order->requested_bottles[2]);
+                if (bottle > NBOTTLES) {
                         panic("Unknown bottle");
                 }
                 if (bottle > 0) {
@@ -358,5 +353,4 @@ static void go_home(void)
                 lock_release(cust_lock);
         }
 }
-
 

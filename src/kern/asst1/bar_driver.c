@@ -315,7 +315,7 @@ void mix(struct barorder *order)
                 bottle = order->requested_bottles[i];
                 order->glass.contents[i] = bottle;
 
-                if (bottle > NBOTTLES) {
+                if (bottle > NBOTTLES || bottle < 0) {
                         kprintf("unkown of %d,in i = %d\n",bottle,i);
                         kprintf("the error order is %d,%d,%d\n",
                                 order->requested_bottles[0],

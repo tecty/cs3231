@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for (( i=0; i < 10; i++ )); do
+for (( i=0; i < 128; i++ )); do
   # echo the test situation
   echo ""
   echo "---------------------------------"
@@ -11,5 +11,5 @@ for (( i=0; i < 10; i++ )); do
   cat sys161.conf.tmplate  > sys161.conf
   echo '28      random  seed='$i >> sys161.conf
 
-  sh $1
+  sh $1  2>/dev/null  
 done

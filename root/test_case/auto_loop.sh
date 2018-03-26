@@ -1,2 +1,5 @@
 #!/bin/bash
-./loop_test.sh $1 > $2 2>/dev/null 
+
+## Usage: ./auto_loop.sh test1d.sh out.tmp &
+
+time ./loop_test.sh $1 > $2

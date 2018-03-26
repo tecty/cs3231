@@ -21,14 +21,21 @@
 struct semaphore *mix_sem;
 // lock the mixxing procedure for only one thread
 struct lock *mix_lock;
+// lock for reading the exist order in the system
+struct lock *order_lock;
+
 
 
 // semaphore for passing order
 struct semaphore *order_sem_empty;
 struct semaphore *order_sem_full;
 
-// temporary to store the order 
-struct barorder *the_order;
+// store the order as a long queue
+struct barorder *order_queue[NCUSTOMERS];
+// the pointer of the queue
+int order_queue_hi, order_queue_lo; 
+
+
 
 // lock for to get the order 
 // struct lock *order_lock;
@@ -53,14 +60,28 @@ void order_drink(struct barorder *order)
     // wait until the system doesn't have order
     P(order_sem_full);
 
-    // pass a order into system 
-    the_order = order;
+    // // CRITICAL REGION:: reading order in the sys.
+    // lock_acquire(order_lock);
+
+    // // push the order into queue
+    // order_queue[order_queue_hi] = order;
+    // order_queue_hi = (order_queue_hi +1 )%NCUSTOMERS;
+
+
+    // // CRITICAL REGION END::
+    // lock_release(order_lock);
 
     // the system has some order, wake up some bartender
     V(order_sem_empty);
 
-    // wait for the mix is finished
-    P(mix_sem);
+    // // wait for the mix is finished
+    // P(mix_sem);
+
+    // mix by myself
+    order->glass.contents[0] = 1;
+    order->glass.contents[1] = 0;
+    order->glass.contents[2] = 0;
+
 }
 
 
@@ -85,9 +106,16 @@ struct barorder *take_order(void)
     // wait if the_order is empty
     P(order_sem_empty);
 
-    // get the only order in the system
-    ret = the_order;
 
+    // // CRITICAL REGION:: read order in the sys.
+    // lock_acquire(order_lock);
+
+    // // dequeue the order from the system
+    // ret = order_queue[order_queue_lo];
+    // order_queue_lo = (order_queue_lo +1)%NCUSTOMERS;
+
+    // // CRITICAL REGION END ::
+    // lock_release(order_lock);
 
     return ret;
 }
@@ -110,14 +138,12 @@ void fill_order(struct barorder *order)
     /* add any sync primitives you need to ensure mutual exclusion
         holds as described */
 
-    // remove compile error 
-    // kprintf("try to mix some order\n");
-    lock_acquire(mix_lock);
+
     
     /* the call to mix must remain */
-    mix(order);
+    // mix(order);
+    (void) order;
 
-    lock_release(mix_lock);
 
 }
 
@@ -163,15 +189,27 @@ void bar_open(void)
 
     // create the sem for mixxing.
     mix_sem = sem_create("mix_sem",0);
+    KASSERT(mix_sem != NULL);
 
     // create the lock for mix
     mix_lock = lock_create("mix_lock");
+    KASSERT(mix_lock != NULL);
+
+    // create the lock for reading the order
+    order_lock = lock_create("order_lock");
+    KASSERT(order_lock!=NULL);
+    // initial the order queue with null and 0, 0
+    for(int i= 0; i< NCUSTOMERS; i ++){
+        order_queue[i] = NULL;
+    }
+    order_queue_hi = order_queue_lo= 0;
+    
 
     // create the order semaphore 
     order_sem_empty = sem_create("order_sem_empty",0);
+    KASSERT(order_sem_empty);
     order_sem_full = sem_create("order_sem_full",1);
-
-
+    KASSERT(order_sem_full);
 
 }
 
@@ -189,7 +227,8 @@ void bar_close(void)
     sem_destroy(mix_sem);
     // destory the lock for mixxing procedure
     lock_destroy(mix_lock);
-
+    // destory the lock for order
+    lock_destroy(order_lock);
 
     // destory the semaphore for passing order
     sem_destroy(order_sem_empty);

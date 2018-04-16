@@ -16,7 +16,6 @@
  */
 
 /* #define PRINT_ON */
-
 /* this semaphore is for cleaning up at the end. */
 static struct semaphore *alldone;
 
@@ -32,6 +31,10 @@ struct bottle bottles[NBOTTLES];
 
 static int customers;
 static struct lock *cust_lock;
+
+int choose_num = 0;
+
+struct lock * choose_num_lock;
 
 /* A function used to manage staff leaving */
 
@@ -76,8 +79,15 @@ static void customer(void *unusedpointer, unsigned long customernum)
                         order.requested_bottles[j] = 0;
                 }
 
+                lock_acquire(choose_num_lock);
                 /* I'll have a beer. */
-                order.requested_bottles[0] = BEER;
+                order.requested_bottles[0] = 1;
+                choose_num++;
+                order.requested_bottles[1] = 1;
+                choose_num++;
+                order.requested_bottles[2] = 2;
+                choose_num++;
+                lock_release(choose_num_lock);
 
                 /* order the drink, this blocks until the order is fulfilled */
                 order_drink(&order);
@@ -148,7 +158,7 @@ static void bartender(void *unusedpointer, unsigned long staff)
                 if (order->go_home_flag == 0) {
 
 #ifdef PRINT_ON
-                        kprintf("S %ld filling\n", staff);
+                        kprintf("S %ld filling.\n", staff) ;
 #endif
 
 
@@ -195,6 +205,10 @@ int run_bar(int nargs, char **args)
 
         (void) nargs; /* avoid compiler warnings */
         (void) args;
+
+        // create a lock for choose numm
+        choose_num_lock= lock_create("choose_num_lock");
+
 
         /* this semaphore indicates everybody has gone home */
         alldone = sem_create("alldone", 0);
@@ -256,6 +270,9 @@ int run_bar(int nargs, char **args)
          * Call your bar clean up routine
          */
         bar_close();
+
+        // destory the lock for choose numm
+        lock_destroy(choose_num_lock);
 
         lock_destroy(cust_lock);
         sem_destroy(alldone);
@@ -336,5 +353,4 @@ static void go_home(void)
                 lock_release(cust_lock);
         }
 }
-
 

@@ -205,6 +205,9 @@ proc_create_runprogram(const char *name)
 	newproc->p_addrspace = NULL;
 
 	/* VFS fields */
+	// attach stdin stdout stderr
+
+
 
 	/*
 	 * Lock the current process to copy its current directory.

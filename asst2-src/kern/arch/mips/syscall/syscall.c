@@ -117,8 +117,8 @@ syscall(struct trapframe *tf)
 		break;
 		case SYS_read:
 			// read syscall
-				tf->tf_a0,(userptr_t)tf->tf_a1,
 			err = sys__read(
+				tf->tf_a0,(userptr_t)tf->tf_a1,
 				(size_t)tf->tf_a2
 			);
 		break;

@@ -423,7 +423,7 @@ file.o: ../../syscall/file.c ../../include/types.h \
  includelinks/kern/machine/setjmp.h ../../include/current.h \
  includelinks/machine/current.h ../../include/synch.h ../../include/vfs.h \
  ../../include/vnode.h ../../include/file.h ../../include/limits.h \
- ../../include/syscall.h ../../include/copyinout.h
+ ../../include/syscall.h ../../include/copyinout.h ../../include/proc.h
 loadelf.o: ../../syscall/loadelf.c ../../include/types.h \
  ../../include/kern/types.h includelinks/kern/machine/types.h \
  includelinks/machine/types.h ../../include/kern/errno.h \

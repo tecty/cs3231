@@ -14,19 +14,25 @@
 #include <file.h>
 #include <syscall.h>
 #include <copyinout.h>
+#include <proc.h>
 
 /*
  * Add your file-related functions here ...
  */
 
 int sys__open(userptr_t filename, int flags, mode_t mode){
-    
+    // check whether the string given by the user is valid 
+    copyinstr(filename,(char *)&str_buf,STR_BUF_SIZE, NULL);
     
     // the vnode for vfs call 
     struct vnode *vn;
     
+    //the slot of the slot of open file table
+    struct open_file_info **oft_slot; 
+
+
     // open by vfs call 
-    int res = vfs_open(filename, flags,mode, &vn);
+    int res = vfs_open((char *)&str_buf, flags,mode, &vn);
     
     if(res){
         // some error then early return
@@ -41,7 +47,7 @@ int sys__open(userptr_t filename, int flags, mode_t mode){
             of_table[i] = kmalloc(sizeof(struct open_file_info));
             
             // unexpect no enough memory space 
-            KASSERT(of_table[i]== NULL);
+            KASSERT(of_table[i]!= NULL);
 
             /*
              * Set Up: the information of a new opened file
@@ -58,6 +64,9 @@ int sys__open(userptr_t filename, int flags, mode_t mode){
             // the open file is this flag
             of_table[i]->o_flags = flags;
 
+            // get the pointer of this new slot
+            oft_slot = &(of_table[i]);
+
             // Successful: break the loop and make a reference in
             // fd table 
             goto FD_REF;
@@ -72,11 +81,12 @@ int sys__open(userptr_t filename, int flags, mode_t mode){
 
 
     // find an empty slot to store the pointer in fd_table
-    label FD_REF; 
+FD_REF:
     for(int i = 0;i < __OPEN_MAX;i++){
         if(curproc->fd_table[i]== NULL){
-            //add the vnode into fd table
-            curproc->fd_table[i] =vn;
+            // malloc a space to store the pin
+            curproc->fd_table[i] =oft_slot;
+            
             // early return with success
             return res;
         }
@@ -85,12 +95,12 @@ int sys__open(userptr_t filename, int flags, mode_t mode){
     res = EMFILE;
 
     // close the file because it would never been use
-    vfs_close(vn)
+    vfs_close(vn);
 
 
 
     // free the vnode that acquire
-    label CATCH_FREE_VNODE;
+CATCH_FREE_VNODE:
     vfs_close(vn);
 
     return res;
@@ -98,8 +108,8 @@ int sys__open(userptr_t filename, int flags, mode_t mode){
 
 int sys__read(int fd, void * buf, size_t buflen){
     // uio operation needed structure 
-	struct iovec iov;
-	struct uio ku;
+	// struct iovec iov;
+	// struct uio ku;
     
     // test code 
     kprintf("try to read %d \n",fd);

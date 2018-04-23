@@ -11,4 +11,4 @@ file.o: ../../syscall/file.c ../../include/types.h \
  includelinks/kern/machine/setjmp.h ../../include/current.h \
  includelinks/machine/current.h ../../include/synch.h ../../include/vfs.h \
  ../../include/vnode.h ../../include/file.h ../../include/limits.h \
- ../../include/syscall.h ../../include/copyinout.h
+ ../../include/syscall.h ../../include/copyinout.h ../../include/proc.h

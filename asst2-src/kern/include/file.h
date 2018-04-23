@@ -25,16 +25,18 @@ struct open_file_info{
     struct vnode *vn;
     // how does this file opened
     mode_t o_flags;
-}
+};
 
 // According to the piazza 
 // https://piazza.com/class/jdwg14qxhhb4kp?cid=230
 // the file table has construct in this number
-struct open_file_info *of_table[__PID_MAX*__OPEN_MAX];
+struct open_file_info *of_table[__PID_MAX];
 
+
+#define STR_BUF_SIZE 8192
 
 // a global buffer to record the filename or read info 
-char str_buf[8192];
+char str_buf[STR_BUF_SIZE];
 
 
 

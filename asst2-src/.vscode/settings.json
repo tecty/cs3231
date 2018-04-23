@@ -6,6 +6,8 @@
         "unistd.h": "c",
         "types.h": "c",
         "limits.h": "c",
-        "copyinout.h": "c"
+        "copyinout.h": "c",
+        "proc.h": "c",
+        "current.h": "c"
     }
 }

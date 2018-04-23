@@ -73,12 +73,9 @@ struct proc {
 
 	/* add more material here as needed */
 
-	// // a pointer array for vnode to do the system operation  
-	// struct vnode *fd_table[__OPEN_MAX];
-
 	// a file descriptor table is:
 	// a pointer array point to the a slot of poen File table
-	struct open_file_info *fd_table[__OPEN_MAX];
+	struct open_file_info **fd_table[__OPEN_MAX];
 };
 
 /* This is the process structure for the kernel and for kernel-only threads. */

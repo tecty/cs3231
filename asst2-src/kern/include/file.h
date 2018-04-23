@@ -16,10 +16,10 @@
  */
 
 
-struct file_info{
-    struct vnode * vno;
-    struct uio* uio;
-};
+// struct file_info{
+//     struct vnode * vno;
+//     struct uio* uio;
+// };
 
 int sys__open(userptr_t filename, int flags, mode_t mode);
 int sys__read(int fd, void * buf, size_t buflen);

@@ -22,10 +22,43 @@
 int sys__open(userptr_t filename, int flags, mode_t mode){
     // the vnode for vfs call 
     struct vnode *vn;
-
-    // open by vfs call 
-    int res = vfs_open(filename, flags,mode, &vnode);
     
+    // open by vfs call 
+    int res = vfs_open(filename, flags,mode, &vn);
+    
+    if(res){
+        // some error then early return
+        return res;
+    }
+
+    for(int i = 0;i < __OPEN_MAX;i++){
+        // find an empty slot to store the vnode 
+        
+        if(curproc->fd_table[i]== NULL){
+            //add the vnode into fd table
+            curproc->fd_table[i] =vn;
+            // early return with success
+            return res;
+        }
+    }
+    // overflow the fdtable
+    res = EMFILE;
+    // close the file because it would never been use
+    vfs_close(vn)
+
+    return res;
+}
+
+int sys__read(int fd, void * buf, size_t buflen){
+    // uio operation needed structure 
+	struct iovec iov;
+	struct uio ku;
+    
+    // test code 
+    // kprintf("try to read %d \n",fd);
+    // buf = buf;
+    // kprintf("with buff len %u \n\n",(unsigned int)buflen);
+
     /*
     struct uio *un;
     if(res){
@@ -33,16 +66,7 @@ int sys__open(userptr_t filename, int flags, mode_t mode){
         return res;
     }
     uio_kinit(...);
-
-    //add the file into fd table
     */
-    return res;
-}
-
-int sys__read(int fd, void * buf, size_t buflen){
-    kprintf("try to read %d \n",fd);
-    buf = buf;
-    kprintf("with buff len %u \n\n",(unsigned int)buflen);
     return 0;
 }
 

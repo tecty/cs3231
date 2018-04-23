@@ -73,8 +73,8 @@ struct proc {
 
 	/* add more material here as needed */
 
-	// a pointer array for fdtable  
-	struct file_info *fd_table[__OPEN_MAX];
+	// a pointer array for vnode to do the system operation  
+	struct vnode *fd_table[__OPEN_MAX];
 };
 
 /* This is the process structure for the kernel and for kernel-only threads. */

@@ -205,6 +205,12 @@ proc_create_runprogram(const char *name)
 	newproc->p_addrspace = NULL;
 
 	/* VFS fields */
+	
+	// clean up the fd_table with a bunch of NULL
+	for(int i =0; i < __OPEN_MAX; i ++){
+		newproc->fd_table[i] = NULL;
+	}
+	
 	// attach stdin stdout stderr
 
 

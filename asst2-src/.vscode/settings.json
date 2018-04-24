@@ -8,6 +8,8 @@
         "limits.h": "c",
         "copyinout.h": "c",
         "proc.h": "c",
-        "current.h": "c"
+        "current.h": "c",
+        "uio.h": "c",
+        "fcntl.h": "c"
     }
 }

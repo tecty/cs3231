@@ -49,6 +49,9 @@
 #include <addrspace.h>
 #include <vnode.h>
 
+#include <file.h>
+
+
 /*
  * The process for the kernel; this holds all the kernel-only threads.
  */
@@ -165,8 +168,15 @@ proc_destroy(struct proc *proc)
 		as_destroy(as);
 	}
 
+	// free the connection with the stdin and stdout 
+
+	
+
 	KASSERT(proc->p_numthreads == 0);
 	spinlock_cleanup(&proc->p_lock);
+
+
+
 
 	kfree(proc->p_name);
 	kfree(proc);
@@ -212,6 +222,9 @@ proc_create_runprogram(const char *name)
 	}
 	
 	// attach stdin stdout stderr
+	ker_open((char *)"con:", 0,0664, NULL);
+	ker_open((char *)"con:", 1,0664, NULL);
+	ker_open((char *)"con:", 1,0664, NULL);
 
 
 

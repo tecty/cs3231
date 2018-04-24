@@ -20,27 +20,32 @@
  * Add your file-related functions here ...
  */
 
-int sys__open(userptr_t filename, int flags, mode_t mode){
-    // check whether the string given by the user is valid 
-    copyinstr(filename,(char *)&str_buf,STR_BUF_SIZE, NULL);
-    
+int ker_open(char * filename, int flags, mode_t mode, int *retval ){
+    kprintf("try to open file %s\n",filename);
+    int res =0;
     // the vnode for vfs call 
     struct vnode *vn;
     
     //the slot of the slot of open file table
     struct open_file_info **oft_slot; 
 
+    // test message:
+    // kprintf("try to print %s \n",(char *)&str_buf);
 
     // open by vfs call 
-    int res = vfs_open((char *)&str_buf, flags,mode, &vn);
+    res = vfs_open(filename, flags,mode, &vn);
     
     if(res){
         // some error then early return
+        kprintf("Error here with %d \n",res);
         return res;
+        
     }
 
+
+    kprintf("try to find a slot in oft \n");
     // find a slot to store in the open file table 
-    for(int i =0; i < __OPEN_MAX* __PID_MAX; i ++ ){
+    for(int i =0; i <  __PID_MAX; i ++ ){
         if(of_table[i] == NULL){
             // a empty slot for the open file table
             // malloc a space for the file info 
@@ -67,6 +72,11 @@ int sys__open(userptr_t filename, int flags, mode_t mode){
             // get the pointer of this new slot
             oft_slot = &(of_table[i]);
 
+            // need to delete 
+            oft_slot = oft_slot;
+
+            kprintf("found a slot in oft\n");
+
             // Successful: break the loop and make a reference in
             // fd table 
             goto FD_REF;
@@ -82,40 +92,91 @@ int sys__open(userptr_t filename, int flags, mode_t mode){
 
     // find an empty slot to store the pointer in fd_table
 FD_REF:
-    for(int i = 0;i < __OPEN_MAX;i++){
-        if(curproc->fd_table[i]== NULL){
-            // malloc a space to store the pin
-            curproc->fd_table[i] =oft_slot;
+    kprintf("try to find a slot in the fdt\n");
+    // for(int i = 0;i < __OPEN_MAX;i++){
+    //     if(curproc->fd_table[i]== NULL){
+    //         // // malloc a space to store the pin
+    //         // curproc->fd_table[i] =oft_slot;
+
+    //         // set the return value to fd 
+    //         *retval  = i;
             
-            // early return with success
-            return res;
-        }
-    }
+    //         kprintf("sucessfully open a file %s\n",filename);
+    //         // early return with success
+    //         return res;
+    //     }
+    // }
+    *retval = 0;
+    kprintf("couldn't find a slot in the fd table \n ");
     // overflow the fdtable
     res = EMFILE;
 
-    // close the file because it would never been use
-    vfs_close(vn);
 
 
 
     // free the vnode that acquire
 CATCH_FREE_VNODE:
+    // close the file because it would never been use
     vfs_close(vn);
+
+    kprintf("Error here %d \n",res);
 
     return res;
 }
 
-int sys__read(int fd, void * buf, size_t buflen){
+
+int sys__open(userptr_t filename, int flags, mode_t mode,int *retval){
+    int res; 
+    
+    
+    // check whether the string given by the user is valid 
+    res = copyinstr(filename,(char *)&str_buf,STR_BUF_SIZE, NULL);
+    
+    if(res){
+        // Error Catch: Invalid filename pointer
+        // return the error code assigned by copyinstr()
+        kprintf("Error here %d \n",res);
+        return res;
+    }
+
+    res = ker_open((char *)str_buf,flags,mode, retval);
+
+    return res;
+}
+
+int sys__read(int fd, void * buf, size_t buflen,size_t *retval){
     // uio operation needed structure 
 	// struct iovec iov;
 	// struct uio ku;
     
     // test code 
-    kprintf("try to read %d \n",fd);
-    buf = buf;
-    kprintf("with buff len %u \n\n",(unsigned int)buflen);
+    // kprintf("try to read %d \n",fd);
+    // buf = buf;
+    // kprintf("with buff len %u \n\n",(unsigned int)buflen);
 
+    // a value to store the result 
+    // success is 0 
+    int res = 0; 
+    // declear the var to do uio
+    struct uio ku;
+    struct iovec iov;
+
+    if(curproc->fd_table[fd] == NULL){
+        // no file is opened for this fd 
+        return EBADF;
+    }
+    // dereference the oopen file info 
+    struct open_file_info *cur_ofi = (* (curproc->fd_table[fd]));
+
+    //early return if the file is not open for reading
+    int how = cur_ofi->o_flags & O_ACCMODE;
+    switch(how){
+        case O_RDONLY:
+        case O_RDWR: 
+        break;
+        default:
+        return EBADF;
+    }
     /*
     struct uio *un;
     if(res){
@@ -123,24 +184,102 @@ int sys__read(int fd, void * buf, size_t buflen){
         return res;
     }
     uio_kinit(...);
+    
+    copyoutstr
     */
-    return 0;
+    
+    // init the uio block by the OFI 
+    uio_kinit(&iov, &ku,
+        str_buf,STR_BUF_SIZE, cur_ofi->f_offset,UIO_READ);
+    res = VOP_READ(cur_ofi->vn , &ku);
+    if(res){
+        // Error Catch: VOP_READ Error 
+        // return the error code from VOP_READ
+        return res;
+    }
+
+    // push forward the current file position 
+    // by refreshing the value 
+    cur_ofi->f_offset = ku.uio_offset;
+
+    // copy out the string to cross the system boundary
+    res = copyoutstr((char *)str_buf,buf, buflen, retval);
+
+    if(res){
+        // Error Catch: Invalid filename pointer
+        // return the error code assigned by copyinstr()
+        return res;
+    }
+
+    // return successfully
+    return res;
 }
 
-int sys__write(int fd, void * buf, size_t nbytes){
-    kprintf("try to write %d \n",fd);
-    buf = buf;
-    kprintf("with write len %u \n\n",(unsigned int)nbytes);
+int sys__write(int fd, void * buf, size_t nbytes,size_t *retval){
+    kprintf("try to print sth \n");
+    // uio operation needed structure 
+	// struct iovec iov;
+	// struct uio ku;
+    // a value to store the result 
+    // success is 0 
+    int res = 0; 
+    // declear the var to do uio
+    struct uio ku;
+    struct iovec iov;
 
-    return 0;
+    if(curproc->fd_table[fd] == NULL){
+        // no file is opened for this fd 
+        return EBADF;
+    }
+    // dereference the oopen file info 
+    struct open_file_info *cur_ofi = (* (curproc->fd_table[fd]));
+
+    //early return if the file is not open for writing
+    int how = cur_ofi->o_flags & O_ACCMODE;
+    switch(how){
+        case O_WRONLY:
+	    case O_RDWR:
+        break;
+        default:
+        return EBADF;
+    }
+    /*
+    struct uio *un;
+    if(res){
+        vfs_close();
+        return res;
+    }
+    uio_kinit(...);
+    
+    copyoutstr
+    */
+    res = copyinstr(buf, str_buf, nbytes, retval);
+    if(res){
+        return res;
+    }
+    // init the uio block by the OFI 
+    uio_kinit(&iov, &ku,
+        str_buf,STR_BUF_SIZE, cur_ofi->f_offset,
+        UIO_WRITE);
+    res = VOP_WRITE(cur_ofi->vn , &ku);
+    if(res){
+        // Error Catch: VOP_WRITE Error 
+        // return the error code from VOP_WRITE
+        return res;
+    }
+    // push forward the current file position 
+    // by refreshing the value 
+    cur_ofi->f_offset = ku.uio_offset;
+    // return successfully
+    return res;
 }
 
-int sys__lseek(int fd, int pos_lo,int pos_hi, int whence){
+int sys__lseek(int fd, int pos_lo,int pos_hi, int whence,off_t *retval64){
     kprintf("try to lseek  %d \n",fd);
     kprintf("pos_lo %d \n",pos_lo);
     kprintf("pos_hi %d \n",pos_hi);
     kprintf("with seek mode %d \n\n",whence);
-
+    retval64 = retval64;
     return 0;
 }
 
@@ -150,9 +289,10 @@ int sys__close(int fd){
     return 0;
 }
 
-int sys__dup2(int oldfd, int newfd){
+int sys__dup2(int oldfd, int newfd,off_t *retval64){
     kprintf("try to copy file info from  %d  to %d \n",
         oldfd,newfd);
+    retval64 = retval64;
 
     return 0;
 }

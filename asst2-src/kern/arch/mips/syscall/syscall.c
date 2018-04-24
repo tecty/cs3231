@@ -80,6 +80,7 @@ syscall(struct trapframe *tf)
 {
 	int callno;
 	int32_t retval;
+	off_t retval64;
 	int err;
 
 	KASSERT(curthread != NULL);
@@ -113,20 +114,20 @@ syscall(struct trapframe *tf)
 		case SYS_open:
 			// open syscall 
 			err =  sys__open((userptr_t) tf->tf_a0,
-				tf->tf_a1,(mode_t)tf->tf_a2);
+				tf->tf_a1,(mode_t)tf->tf_a2,(int *)&retval);
 		break;
 		case SYS_read:
 			// read syscall
 			err = sys__read(
 				tf->tf_a0,(userptr_t)tf->tf_a1,
-				(size_t)tf->tf_a2
+				(size_t)tf->tf_a2,(size_t *)&retval
 			);
 		break;
 		case SYS_write:
 			// write syscall
 			err = sys__write(
 				tf->tf_a0, (userptr_t)tf->tf_a1,
-				(size_t)tf->tf_a2
+				(size_t)tf->tf_a2,(size_t *)&retval 
 			);
 		break;
 		// case SYS_lseek:
@@ -145,7 +146,7 @@ syscall(struct trapframe *tf)
 		case SYS_dup2:
 			// dup2 syscall
 			err = sys__dup2(
-				tf->tf_a0,tf->tf_a1
+				tf->tf_a0,tf->tf_a1,&retval64
 			);
 		break;
 

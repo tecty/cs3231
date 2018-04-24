@@ -23,8 +23,8 @@ struct open_file_info{
     unsigned int ref_count;
     // the pointer of this openfile vnode  
     struct vnode *vn;
-    // how does this file opened
-    mode_t o_flags;
+    // how doeqqqs this file opened
+    int o_flags;
 };
 
 // According to the piazza 
@@ -39,13 +39,13 @@ struct open_file_info *of_table[__PID_MAX];
 char str_buf[STR_BUF_SIZE];
 
 
-
-int sys__open(userptr_t filename, int flags, mode_t mode);
-int sys__read(int fd, void * buf, size_t buflen);
-int sys__write(int fd, void * buf, size_t nbytes);
-int sys__lseek(int fd, int pos_lo,int pos_hi, int whence);
+int ker_open(char * filename, int flags, mode_t mode, int *retval );
+int sys__open(userptr_t filename, int flags, mode_t mode,int *retval);
+int sys__read(int fd, void * buf, size_t buflen, size_t * retval );
+int sys__write(int fd, void * buf, size_t nbytes , size_t *retval);
+int sys__lseek(int fd, int pos_lo,int pos_hi, int whence, off_t *retval64);
 int sys__close(int fd);
-int sys__dup2(int oldfd, int newfd);
+int sys__dup2(int oldfd, int newfd,off_t *retval64);
 
 
 #endif /* _FILE_H_ */

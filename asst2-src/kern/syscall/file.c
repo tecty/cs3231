@@ -20,8 +20,8 @@
  * Add your file-related functions here ...
  */
 
-int ker_open(char * filename, int flags, mode_t mode, int *retval ){
-    kprintf("try to open file %s\n",filename);
+int ker_open(char * filename, int flags, mode_t mode, int *retval,struct proc * to_proc ){
+    // kprintf("try to open file %s\n",filename);
     int res =0;
     // the vnode for vfs call 
     struct vnode *vn;
@@ -30,7 +30,7 @@ int ker_open(char * filename, int flags, mode_t mode, int *retval ){
     struct open_file_info **oft_slot; 
 
     // test message:
-    // kprintf("try to print %s \n",(char *)&str_buf);
+    // kprintf("try to open %s \n",filename);
 
     // open by vfs call 
     res = vfs_open(filename, flags,mode, &vn);
@@ -43,7 +43,7 @@ int ker_open(char * filename, int flags, mode_t mode, int *retval ){
     }
 
 
-    kprintf("try to find a slot in oft \n");
+    // kprintf("try to find a slot in oft \n");
     // find a slot to store in the open file table 
     for(int i =0; i <  __PID_MAX; i ++ ){
         if(of_table[i] == NULL){
@@ -72,10 +72,7 @@ int ker_open(char * filename, int flags, mode_t mode, int *retval ){
             // get the pointer of this new slot
             oft_slot = &(of_table[i]);
 
-            // need to delete 
-            oft_slot = oft_slot;
-
-            kprintf("found a slot in oft\n");
+            // kprintf("found a slot in oft\n");
 
             // Successful: break the loop and make a reference in
             // fd table 
@@ -92,23 +89,24 @@ int ker_open(char * filename, int flags, mode_t mode, int *retval ){
 
     // find an empty slot to store the pointer in fd_table
 FD_REF:
-    kprintf("try to find a slot in the fdt\n");
-    // for(int i = 0;i < __OPEN_MAX;i++){
-    //     if(curproc->fd_table[i]== NULL){
-    //         // // malloc a space to store the pin
-    //         // curproc->fd_table[i] =oft_slot;
+    // kprintf("try to find a slot in the fdt\n");
+    for(int i = 0;i < __OPEN_MAX;i++){
+        if(to_proc->fd_table[i]== NULL){
+            // malloc a space to store the pin
+            to_proc->fd_table[i] =oft_slot;
 
-    //         // set the return value to fd 
-    //         *retval  = i;
+            // set the return value to fd 
+            *retval  = i;
             
-    //         kprintf("sucessfully open a file %s\n",filename);
-    //         // early return with success
-    //         return res;
-    //     }
-    // }
-    kprintf("the value of retval is %d\n",(int)retval);
-    *retval = 0;
-    kprintf("couldn't find a slot in the fd table \n ");
+            // kprintf("sucessfully open a file %s\n",filename);
+
+            kprintf("the new fd for this file is %d\n", i );
+            // early return with success
+            return res;
+        }
+    }
+    // *retval = 0;
+    // kprintf("couldn't find a slot in the fd table \n ");
     // overflow the fdtable
     res = EMFILE;
 
@@ -120,7 +118,7 @@ CATCH_FREE_VNODE:
     // close the file because it would never been use
     vfs_close(vn);
 
-    kprintf("Error here %d \n",res);
+    // kprintf("Error here %d \n",res);
 
     return res;
 }
@@ -140,7 +138,9 @@ int sys__open(userptr_t filename, int flags, mode_t mode,int *retval){
         return res;
     }
 
-    res = ker_open((char *)str_buf,flags,mode, retval);
+    // call the ker_open to handle most of the job
+    // which assume all the value and pointer is in kernel
+    res = ker_open((char *)str_buf,flags,mode, retval,curproc);
 
     return res;
 }
@@ -178,20 +178,11 @@ int sys__read(int fd, void * buf, size_t buflen,size_t *retval){
         default:
         return EBADF;
     }
-    /*
-    struct uio *un;
-    if(res){
-        vfs_close();
-        return res;
-    }
-    uio_kinit(...);
-    
-    copyoutstr
-    */
-    
+
+    // Invariant: retval <= buflen 
     // init the uio block by the OFI 
     uio_kinit(&iov, &ku,
-        str_buf,STR_BUF_SIZE, cur_ofi->f_offset,UIO_READ);
+        str_buf,buflen, cur_ofi->f_offset,UIO_READ);
     res = VOP_READ(cur_ofi->vn , &ku);
     if(res){
         // Error Catch: VOP_READ Error 
@@ -199,13 +190,21 @@ int sys__read(int fd, void * buf, size_t buflen,size_t *retval){
         return res;
     }
 
+    // Invariant: retval <= buflen 
+    // get how much has read by difference of offset
+    *retval = ku.uio_offset - cur_ofi->f_offset ;
+
     // push forward the current file position 
     // by refreshing the value 
     cur_ofi->f_offset = ku.uio_offset;
+    
 
-    // copy out the string to cross the system boundary
-    res = copyoutstr((char *)str_buf,buf, buflen, retval);
 
+    // Invariant: retval <= buflen 
+    // copy out the file  to cross the system boundary
+    // copy out how much has read from file
+    res = copyout((char *)str_buf,buf,*retval);
+    
     if(res){
         // Error Catch: Invalid filename pointer
         // return the error code assigned by copyinstr()
@@ -217,7 +216,6 @@ int sys__read(int fd, void * buf, size_t buflen,size_t *retval){
 }
 
 int sys__write(int fd, void * buf, size_t nbytes,size_t *retval){
-    kprintf("try to print sth \n");
     // uio operation needed structure 
 	// struct iovec iov;
 	// struct uio ku;
@@ -228,8 +226,10 @@ int sys__write(int fd, void * buf, size_t nbytes,size_t *retval){
     struct uio ku;
     struct iovec iov;
 
+
     if(curproc->fd_table[fd] == NULL){
         // no file is opened for this fd 
+        kprintf("error with the fd table is nothing there with fd %d \n",fd);
         return EBADF;
     }
     // dereference the oopen file info 
@@ -254,20 +254,29 @@ int sys__write(int fd, void * buf, size_t nbytes,size_t *retval){
     
     copyoutstr
     */
-    res = copyinstr(buf, str_buf, nbytes, retval);
+    res = copyinstr(buf, str_buf, STR_BUF_SIZE,retval);
     if(res){
+        kprintf("Copy in Error with %d \n",res);
+        // Error Catch: Copyin error.
         return res;
     }
+    
+    // kprintf("try to print: \n%s\n",str_buf);
     // init the uio block by the OFI 
     uio_kinit(&iov, &ku,
-        str_buf,STR_BUF_SIZE, cur_ofi->f_offset,
+        str_buf,nbytes, cur_ofi->f_offset,
         UIO_WRITE);
     res = VOP_WRITE(cur_ofi->vn , &ku);
     if(res){
+        kprintf("VOP WRITE error with %d\n", res);
         // Error Catch: VOP_WRITE Error 
         // return the error code from VOP_WRITE
         return res;
     }
+
+    // refresh the retval by offset changes
+    *retval =ku.uio_offset - cur_ofi->f_offset; 
+    
     // push forward the current file position 
     // by refreshing the value 
     cur_ofi->f_offset = ku.uio_offset;

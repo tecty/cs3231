@@ -85,6 +85,8 @@ proc_create(const char *name)
 	/* VFS fields */
 	proc->p_cwd = NULL;
 
+
+
 	return proc;
 }
 
@@ -168,8 +170,8 @@ proc_destroy(struct proc *proc)
 		as_destroy(as);
 	}
 
+	// TODO: 
 	// free the connection with the stdin and stdout 
-
 	
 
 	KASSERT(proc->p_numthreads == 0);
@@ -221,11 +223,23 @@ proc_create_runprogram(const char *name)
 		newproc->fd_table[i] = NULL;
 	}
 	
+	int fd;
+	char buf[10];
 	// attach stdin stdout stderr
-	ker_open((char *)"con:", 0,0664, NULL);
-	ker_open((char *)"con:", 1,0664, NULL);
-	ker_open((char *)"con:", 1,0664, NULL);
 
+	strcpy(buf, (char *)"con:");
+	ker_open(buf, 0,0664, &fd, newproc);
+	KASSERT(fd == 0);
+	
+	strcpy(buf, (char *)"con:");
+	ker_open(buf, 1,0664, &fd,newproc);
+	KASSERT(fd == 1);
+	
+	strcpy(buf, (char *)"con:");
+	ker_open(buf, 1,0664, &fd, newproc);
+	KASSERT(fd == 2);
+
+	
 
 
 	/*

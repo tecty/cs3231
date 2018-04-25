@@ -106,6 +106,7 @@ FD_REF:
     //         return res;
     //     }
     // }
+    kprintf("the value of retval is %d\n",(int)retval);
     *retval = 0;
     kprintf("couldn't find a slot in the fd table \n ");
     // overflow the fdtable

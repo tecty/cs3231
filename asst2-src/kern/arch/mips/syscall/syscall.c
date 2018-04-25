@@ -35,8 +35,10 @@
 #include <thread.h>
 #include <current.h>
 #include <syscall.h>
-#include <file.h>
 
+#include <file.h>
+#include <copyinout.h>
+#include <endian.h>
 /*
  * System call dispatcher.
  *
@@ -130,13 +132,26 @@ syscall(struct trapframe *tf)
 				(size_t)tf->tf_a2,(size_t *)&retval 
 			);
 		break;
-		// case SYS_lseek:
-		// 	// lseek syscall 
-		// 	err = sys__lseek(
-		// 		tf->tf_a0,tf->tf_a1, tf->tf_a2, tf->tf_a3
-		// 	);
-		// 	err = 0;
-		// break;
+		case SYS_lseek:
+			// conver two slot to a 64bit off_t
+			join32to64(tf->tf_a2, tf->tf_a3, (uint64_t *)&retval64);
+			
+			// declear the value to store whence
+			int whence;
+
+			// go to the stack to find the last argument
+			copyin((userptr_t)tf->tf_sp + 16, &whence, sizeof(int));
+
+
+			// lseek syscall 
+			err = sys__lseek(
+				tf->tf_a0,retval64, whence, &retval64
+			);
+			if(!err ){
+				// if no error occour, then return the new offset
+				split64to32(retval64, &tf->tf_v0, &tf->tf_v1);
+			}
+		break;
 		case SYS_close:
 			// close syscall 
 			err = sys__close(
@@ -146,7 +161,7 @@ syscall(struct trapframe *tf)
 		case SYS_dup2:
 			// dup2 syscall
 			err = sys__dup2(
-				tf->tf_a0,tf->tf_a1,&retval64
+				tf->tf_a0,tf->tf_a1
 			);
 		break;
 

@@ -170,9 +170,14 @@ proc_destroy(struct proc *proc)
 		as_destroy(as);
 	}
 
-	// TODO: 
 	// free the connection with the stdin and stdout 
-	
+	for(int i=0; i < __OPEN_MAX; i ++ ){
+		if(proc->fd_table[i]!= NULL){
+			// close unclose file for this process
+			ker__close(i, proc);
+		}
+	}
+
 
 	KASSERT(proc->p_numthreads == 0);
 	spinlock_cleanup(&proc->p_lock);

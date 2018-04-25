@@ -37,7 +37,7 @@ int ker_open(char * filename, int flags, mode_t mode, int *retval,struct proc * 
     
     if(res){
         // some error then early return
-        kprintf("Error here with %d \n",res);
+        // kprintf("Error here with %d \n",res);
         return res;
         
     }
@@ -100,7 +100,7 @@ FD_REF:
             
             // kprintf("sucessfully open a file %s\n",filename);
 
-            kprintf("the new fd for this file is %d\n", i );
+            // kprintf("the new fd for this file is %d\n", i );
             // early return with success
             return res;
         }
@@ -123,6 +123,40 @@ CATCH_FREE_VNODE:
     return res;
 }
 
+int ker__close(int fd, struct proc *to_proc ){
+    // for kenel process to close other proc file table
+    if(to_proc->fd_table[fd] == NULL){
+        // no file is opened for this fd 
+        return EBADF;
+    }
+
+    struct open_file_info *cur_ofi = (*to_proc->fd_table[fd]);
+
+    // dereference from this fd_table
+    cur_ofi->ref_count -- ;
+
+    if(cur_ofi->ref_count == 0){
+        /*
+         * no more fd_table has reference to this openfile slot
+         * close the flie and clean this slot 
+         */        
+        // vfs_close(using_vnode);
+        vfs_close(cur_ofi->vn);        
+        
+        // free the slot of OFT 
+        kfree(cur_ofi);
+        // set that slot of OFT to NULL
+        cur_ofi = NULL;
+
+    }
+
+    // clean the slot of fd table
+    to_proc->fd_table[fd] = NULL;
+
+    // successfully close the file
+    return 0;
+}
+
 
 int sys__open(userptr_t filename, int flags, mode_t mode,int *retval){
     int res; 
@@ -134,7 +168,7 @@ int sys__open(userptr_t filename, int flags, mode_t mode,int *retval){
     if(res){
         // Error Catch: Invalid filename pointer
         // return the error code assigned by copyinstr()
-        kprintf("Error here %d \n",res);
+        // kprintf("Error here %d \n",res);
         return res;
     }
 
@@ -197,7 +231,11 @@ int sys__read(int fd, void * buf, size_t buflen,size_t *retval){
     // push forward the current file position 
     // by refreshing the value 
     cur_ofi->f_offset = ku.uio_offset;
-    
+    if(*retval ==0 ){
+        // didn't read anything, also a successful read
+        // return 0
+        return res;
+    }
 
 
     // Invariant: retval <= buflen 
@@ -229,7 +267,7 @@ int sys__write(int fd, void * buf, size_t nbytes,size_t *retval){
 
     if(curproc->fd_table[fd] == NULL){
         // no file is opened for this fd 
-        kprintf("error with the fd table is nothing there with fd %d \n",fd);
+        // kprintf("error with the fd table is nothing there with fd %d \n",fd);
         return EBADF;
     }
     // dereference the oopen file info 
@@ -244,19 +282,13 @@ int sys__write(int fd, void * buf, size_t nbytes,size_t *retval){
         default:
         return EBADF;
     }
-    /*
-    struct uio *un;
-    if(res){
-        vfs_close();
-        return res;
-    }
-    uio_kinit(...);
-    
-    copyoutstr
-    */
+
     res = copyinstr(buf, str_buf, STR_BUF_SIZE,retval);
+
+    // Unkown error: why can not use this ? 
+    // res = copyin(buf, str_buf,nbytes);
     if(res){
-        kprintf("Copy in Error with %d \n",res);
+        // kprintf("Copy in Error with %d \n",res);
         // Error Catch: Copyin error.
         return res;
     }
@@ -268,7 +300,7 @@ int sys__write(int fd, void * buf, size_t nbytes,size_t *retval){
         UIO_WRITE);
     res = VOP_WRITE(cur_ofi->vn , &ku);
     if(res){
-        kprintf("VOP WRITE error with %d\n", res);
+        // kprintf("VOP WRITE error with %d\n", res);
         // Error Catch: VOP_WRITE Error 
         // return the error code from VOP_WRITE
         return res;
@@ -284,25 +316,89 @@ int sys__write(int fd, void * buf, size_t nbytes,size_t *retval){
     return res;
 }
 
-int sys__lseek(int fd, int pos_lo,int pos_hi, int whence,off_t *retval64){
-    kprintf("try to lseek  %d \n",fd);
-    kprintf("pos_lo %d \n",pos_lo);
-    kprintf("pos_hi %d \n",pos_hi);
-    kprintf("with seek mode %d \n\n",whence);
+int sys__lseek(int fd,off_t pos, int whence,off_t *retval64){
+    // kprintf("try to lseek  %d \n",fd);
+    // kprintf("pos_lo %d \n",pos_lo);
+    // kprintf("pos_hi %d \n",pos_hi);
+    // kprintf("with seek mode %d \n\n",whence);
+
+    // protect from bad fd
+    if(curproc->fd_table[fd] == NULL){
+        // no file is opened for this fd 
+        return EBADF;
+    }
+
+    // dereference the oopen file info 
+    struct open_file_info *cur_ofi = (* (curproc->fd_table[fd]));
+
+    if (!VOP_ISSEEKABLE(cur_ofi->vn)){
+        // this open file can not be process with seek 
+        return ESPIPE;
+    }
+    
+    // record the old offse in case it become negative
+    // after seeking 
+    off_t old_offset = cur_ofi->f_offset;
+
+    // temporary struct to store file info 
+    struct stat file_stat;
+    
+    
+    // change the file offset by requirement 
+    switch(whence){
+        case SEEK_SET:
+            cur_ofi->f_offset  = pos;
+            break;
+        case SEEK_CUR:
+            cur_ofi->f_offset += pos;
+            break;
+        case SEEK_END:
+
+            // get the file information by VOP_STAT
+            VOP_STAT(cur_ofi->vn, &file_stat);
+            // add up the offset by file stat
+            cur_ofi->f_offset  = file_stat.st_size + pos;
+            break;
+        default:
+            // error seeking by providing wrong whence
+            return EINVAL;
+            break;
+    }
+
+    // prevent current offset become negative
+    if(cur_ofi->f_offset< 0){
+        // current offset is negative, reset the position
+        cur_ofi->f_offset = old_offset;
+        return EINVAL;
+    }
+
+
     retval64 = retval64;
     return 0;
 }
+
 
 int sys__close(int fd){
-    kprintf("try to close  %d \n",fd);
-    
-    return 0;
+    // kprintf("try to close  %d \n",fd);
+    // the reverse operation of sys__open
+
+    // passing to ker__close to do the job
+    return ker__close(fd, curproc);
 }
 
-int sys__dup2(int oldfd, int newfd,off_t *retval64){
-    kprintf("try to copy file info from  %d  to %d \n",
-        oldfd,newfd);
-    retval64 = retval64;
+int sys__dup2(int oldfd, int newfd){
+
+    if(curproc->fd_table[oldfd] == NULL){
+        // no file is opened for this fd 
+        return EBADF;
+    }
+    if(curproc->fd_table[newfd] != NULL){
+        // must has no file is opened for this fd 
+        return EBADF;
+    }
+
+
+    curproc->fd_table[newfd] =curproc->fd_table[oldfd];
 
     return 0;
 }

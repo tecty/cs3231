@@ -41,12 +41,14 @@ char str_buf[STR_BUF_SIZE];
 
 
 int ker_open(char * filename, int flags, mode_t mode, int *retval, struct proc *to_proc );
+int ker__close(int fd, struct proc *to_proc );
+
 int sys__open(userptr_t filename, int flags, mode_t mode,int *retval);
 int sys__read(int fd, void * buf, size_t buflen, size_t * retval );
 int sys__write(int fd, void * buf, size_t nbytes , size_t *retval);
-int sys__lseek(int fd, int pos_lo,int pos_hi, int whence, off_t *retval64);
+int sys__lseek(int fd, off_t pos, int whence,off_t *retval64);
 int sys__close(int fd);
-int sys__dup2(int oldfd, int newfd,off_t *retval64);
+int sys__dup2(int oldfd, int newfd);
 
 
 #endif /* _FILE_H_ */

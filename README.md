@@ -10,7 +10,11 @@ This means that
  * if the first argument is 32-bit and the second is 64-bit, a1 is
  * unused.
 #TODOs
-clean the kprintf in the file.c
+- TRUNC in the open
+- Errno in the open (Kassert )
+- check all the system call return values
+- lock acquire for atomic operation 
+
 
 #Unkown Error
 try to replace copyinstr by copyin in sys__write with Error code 6

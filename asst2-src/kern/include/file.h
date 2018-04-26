@@ -34,7 +34,7 @@ struct open_file_info{
 struct open_file_info *of_table[__PID_MAX];
 
 
-#define STR_BUF_SIZE 8192
+#define STR_BUF_SIZE __ARG_MAX
 
 // a global buffer to record the filename or read info 
 char str_buf[STR_BUF_SIZE];
@@ -48,7 +48,7 @@ int sys__read(int fd, void * buf, size_t buflen, size_t * retval );
 int sys__write(int fd, void * buf, size_t nbytes , size_t *retval);
 int sys__lseek(int fd, off_t pos, int whence,off_t *retval64);
 int sys__close(int fd);
-int sys__dup2(int oldfd, int newfd);
+int sys__dup2(int oldfd, int newfd, int *retval);
 
 
 #endif /* _FILE_H_ */

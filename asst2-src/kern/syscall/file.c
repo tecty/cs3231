@@ -386,20 +386,25 @@ int sys__close(int fd){
     return ker__close(fd, curproc);
 }
 
-int sys__dup2(int oldfd, int newfd){
+int sys__dup2(int oldfd, int newfd, int *retval){
 
     if(curproc->fd_table[oldfd] == NULL){
         // no file is opened for this fd 
         return EBADF;
     }
     if(curproc->fd_table[newfd] != NULL){
-        // must has no file is opened for this fd 
-        return EBADF;
+        // sliently close the new fd
+        sys__close(newfd);
     }
 
-
+    // assign to a duplicate 
     curproc->fd_table[newfd] =curproc->fd_table[oldfd];
 
+    // add a reference count to the ofi 
+    (*curproc->fd_table[oldfd])->ref_count ++;
+
+    // successfully do the dup, return the new fd as spec 
+    *retval = newfd;
     return 0;
 }
 

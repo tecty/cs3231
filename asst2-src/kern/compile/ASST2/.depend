@@ -409,7 +409,8 @@ proc.o: ../../proc/proc.c ../../include/types.h \
  ../../include/threadlist.h includelinks/machine/thread.h \
  ../../include/setjmp.h includelinks/kern/machine/setjmp.h \
  ../../include/addrspace.h ../../include/vm.h includelinks/machine/vm.h \
- opt-dumbvm.h ../../include/vnode.h ../../include/file.h
+ opt-dumbvm.h ../../include/vnode.h ../../include/file.h \
+ ../../include/synch.h
 file.o: ../../syscall/file.c ../../include/types.h \
  ../../include/kern/types.h includelinks/kern/machine/types.h \
  includelinks/machine/types.h ../../include/kern/errno.h \
@@ -689,8 +690,9 @@ syscall.o: ../../arch/mips/syscall/syscall.c ../../include/types.h \
  includelinks/kern/machine/setjmp.h ../../include/current.h \
  includelinks/machine/current.h ../../include/syscall.h \
  ../../include/file.h ../../include/limits.h ../../include/kern/limits.h \
- ../../include/proc.h ../../include/copyinout.h ../../include/endian.h \
- ../../include/kern/endian.h includelinks/kern/machine/endian.h
+ ../../include/proc.h ../../include/synch.h ../../include/copyinout.h \
+ ../../include/endian.h ../../include/kern/endian.h \
+ includelinks/kern/machine/endian.h
 cpu.o: ../../arch/mips/thread/cpu.c ../../include/types.h \
  ../../include/kern/types.h includelinks/kern/machine/types.h \
  includelinks/machine/types.h ../../include/lib.h ../../include/cdefs.h \

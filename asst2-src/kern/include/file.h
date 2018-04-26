@@ -11,6 +11,7 @@
 #include <limits.h>
 #include <types.h>
 #include <proc.h>
+#include <synch.h>
 
 /*
  * Put your function declarations and data types here ...
@@ -26,12 +27,19 @@ struct open_file_info{
     struct vnode *vn;
     // how doeqqqs this file opened
     int o_flags;
+    // A lock may be needed to store here 
+    // to give an atomic operation of file operation.
+    struct lock * f_lock;
 };
 
 // According to the piazza 
 // https://piazza.com/class/jdwg14qxhhb4kp?cid=230
 // the file table has construct in this number
-struct open_file_info *of_table[__PID_MAX];
+// https://piazza.com/class/jdwg14qxhhb4kp?cid=226
+// A big enough table is enough for this table
+// since all the iov is maxed by this number, we can assume
+// no that much file is in the table. (Need more justificatiion)
+struct open_file_info *of_table[2*__IOV_MAX];
 
 
 #define STR_BUF_SIZE __ARG_MAX
@@ -49,6 +57,7 @@ int sys__write(int fd, void * buf, size_t nbytes , size_t *retval);
 int sys__lseek(int fd, off_t pos, int whence,off_t *retval64);
 int sys__close(int fd);
 int sys__dup2(int oldfd, int newfd, int *retval);
-
+// a local use function.
+void set_lock_name (int ofi_id);
 
 #endif /* _FILE_H_ */

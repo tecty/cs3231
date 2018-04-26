@@ -19,6 +19,19 @@
 /*
  * Add your file-related functions here ...
  */
+void set_lock_name (int ofi_id){
+    /*
+     * local function to set the lock name to strbuf
+     * Set up the lock name as ofi-0001
+     */
+    strcpy((char *)&str_buf,"ofi-");
+    // assume the ofi_id would only have less than 2k 
+    str_buf[4] = '0' + ofi_id         / 1000;
+    str_buf[5] = '0' + (ofi_id % 1000)/ 100;
+    str_buf[6] = '0' + (ofi_id % 100) / 10;
+    str_buf[7] = '0' + ofi_id % 10;
+    str_buf[8] = '\0';
+}
 
 int ker_open(char * filename, int flags, mode_t mode, int *retval,struct proc * to_proc ){
     // kprintf("try to open file %s\n",filename);
@@ -68,6 +81,13 @@ int ker_open(char * filename, int flags, mode_t mode, int *retval,struct proc * 
             of_table[i]->vn = vn;
             // the open file is this flag
             of_table[i]->o_flags = flags;
+
+            // setup the lock for this file's atomic operation
+
+            // create the lock name 
+            set_lock_name(i);
+            // create the lock by lock name
+            of_table[i]->f_lock = lock_create(str_buf);
 
             // get the pointer of this new slot
             oft_slot = &(of_table[i]);
@@ -139,9 +159,19 @@ int ker__close(int fd, struct proc *to_proc ){
         /*
          * no more fd_table has reference to this openfile slot
          * close the flie and clean this slot 
-         */        
+         */
+
+        // acquire the lock incase some proc is write or read
+        lock_acquire(cur_ofi->f_lock);
+
         // vfs_close(using_vnode);
         vfs_close(cur_ofi->vn);        
+        
+        // release the lock and free the lock 
+        // to gently close the file
+        lock_release(cur_ofi->f_lock);
+        lock_destroy(cur_ofi->f_lock);
+
         
         // free the slot of OFT 
         kfree(cur_ofi);
@@ -217,7 +247,16 @@ int sys__read(int fd, void * buf, size_t buflen,size_t *retval){
     // init the uio block by the OFI 
     uio_kinit(&iov, &ku,
         str_buf,buflen, cur_ofi->f_offset,UIO_READ);
+
+    // CRITICAL REGION:
+    // the actual file read should be atomic
+    lock_acquire(cur_ofi->f_lock);
+    
     res = VOP_READ(cur_ofi->vn , &ku);
+
+    // CRITICAL REGION END:
+    lock_release(cur_ofi->f_lock);
+
     if(res){
         // Error Catch: VOP_READ Error 
         // return the error code from VOP_READ
@@ -298,7 +337,16 @@ int sys__write(int fd, void * buf, size_t nbytes,size_t *retval){
     uio_kinit(&iov, &ku,
         str_buf,nbytes, cur_ofi->f_offset,
         UIO_WRITE);
+
+    // CIRITICAL REGION:
+    // the actual file write operation must be atomic  
+    lock_acquire(cur_ofi->f_lock);
+
     res = VOP_WRITE(cur_ofi->vn , &ku);
+    
+    // CIRITICAL REGION REGION:
+    lock_release(cur_ofi->f_lock);
+    
     if(res){
         // kprintf("VOP WRITE error with %d\n", res);
         // Error Catch: VOP_WRITE Error 

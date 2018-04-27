@@ -33,12 +33,16 @@ void set_lock_name (int ofi_id){
     str_buf[8] = '\0';
 }
 
+
 int ker_open(char * filename, int flags, mode_t mode, int *retval,struct proc * to_proc ){
     // kprintf("try to open file %s\n",filename);
     int res =0;
     // the vnode for vfs call 
     struct vnode *vn;
-    
+    // temporary struct to store file info 
+    struct stat file_stat;
+
+
     //the slot of the slot of open file table
     struct open_file_info **oft_slot; 
 
@@ -47,6 +51,35 @@ int ker_open(char * filename, int flags, mode_t mode, int *retval,struct proc * 
 
     // open by vfs call 
     res = vfs_open(filename, flags,mode, &vn);
+    // get the file information by VOP_STAT
+    VOP_STAT(vn, &file_stat);
+
+    /*
+     * Some file couldn't be open
+     * return errno and get the vn close
+     *
+     * This couldn't be included
+     * #include <stattypes.h>
+     *  
+    */
+    // switch (file_stat.st_mode&_S_IFMT){
+    //     case _S_IFREG:
+    //         // i can open this type
+    //     break;
+        
+    //     case _S_IFDIR:
+    //     case _S_IFLNK:
+    //     case _S_IFIFO:
+    //     case _S_IFSOCK:
+    //     case _S_IFCHR:
+    //     case _S_IFBLK:
+    //         // I cannot open the file is not regular file
+    //         res = EISDIR;
+    //         goto CATCH_FREE_VNODE;
+    //     break;
+        
+    // }
+    
     
     if(res){
         // some error then early return
@@ -66,12 +99,28 @@ int ker_open(char * filename, int flags, mode_t mode, int *retval,struct proc * 
             
             // unexpect no enough memory space 
             KASSERT(of_table[i]!= NULL);
+            if(of_table[i] == NULL){
+                // return out of memory error
+                res =  ENOMEM;
+                // clean up the vnode
+                goto CATCH_FREE_VNODE;
+            }
 
             /*
              * Set Up: the information of a new opened file
              */
-            // a offset for a new opened file is 0
-            of_table[i]->f_offset = 0;
+
+
+            // set up the offset of the file
+            if(flags& O_APPEND){
+                // get the size of the file and set it as the offset 
+                of_table[i]->f_offset =file_stat.st_size;
+            }
+            else {
+                // a offset for a new opened file is 0
+                of_table[i]->f_offset = 0;
+            }
+
             // a reference count is setted to 1
             // the reference count will increase when dup2() or fork()
             // is used.
@@ -388,9 +437,11 @@ int sys__lseek(int fd,off_t pos, int whence,off_t *retval64){
     // after seeking 
     off_t old_offset = cur_ofi->f_offset;
 
+    
     // temporary struct to store file info 
     struct stat file_stat;
-    
+
+
     
     // change the file offset by requirement 
     switch(whence){
@@ -401,11 +452,11 @@ int sys__lseek(int fd,off_t pos, int whence,off_t *retval64){
             cur_ofi->f_offset += pos;
             break;
         case SEEK_END:
-
             // get the file information by VOP_STAT
             VOP_STAT(cur_ofi->vn, &file_stat);
+            
             // add up the offset by file stat
-            cur_ofi->f_offset  = file_stat.st_size + pos;
+            cur_ofi->f_offset  =file_stat.st_size+ pos;
             break;
         default:
             // error seeking by providing wrong whence
@@ -420,9 +471,13 @@ int sys__lseek(int fd,off_t pos, int whence,off_t *retval64){
         return EINVAL;
     }
 
-
+    // to make compiler happy
+    // since all the change of retval64 is in switch cases.
     retval64 = retval64;
+
+    // successful seek 
     return 0;
+
 }
 
 

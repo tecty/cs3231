@@ -149,7 +149,8 @@ syscall(struct trapframe *tf)
 			);
 			if(!err ){
 				// if no error occour, then return the new offset
-				split64to32(retval64, &tf->tf_v0, &tf->tf_v1);
+				// since  tf_v0= retval 
+				split64to32(retval64,(uint32_t *) &retval, &tf->tf_v1);
 			}
 		break;
 		case SYS_close:

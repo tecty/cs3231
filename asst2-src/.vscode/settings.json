@@ -10,6 +10,8 @@
         "proc.h": "c",
         "current.h": "c",
         "uio.h": "c",
-        "fcntl.h": "c"
+        "fcntl.h": "c",
+        "vnode.h": "c",
+        "stattypes.h": "c"
     }
 }

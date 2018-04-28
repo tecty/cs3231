@@ -277,6 +277,17 @@ main(int argc, char * argv[])
     } while (k < 5);
 
     printf("* PASS\n");
+
+    //test if it will read 0 bytes if the offset is at the end
+    printf("* Test reading at the end of the file\n");
+    r = lseek(fd, 5, SEEK_END);
+    r = read(fd, &buf[0], 90);
+    if(r!=0){
+        printf("INCORRECT file reading: the offset already at the end, so no bytes should be read\n");
+        exit(1);
+    }
+    printf("* PASS\n");
+
     printf("* closing file\n");
     close(fd);
 

@@ -191,7 +191,7 @@ CATCH_FREE_VNODE:
 
 int ker__close(int fd, struct proc *to_proc ){
     // for kenel process to close other proc file table
-    if(to_proc->fd_table[fd] == NULL){
+    if(fd < 0 || fd >= __OPEN_MAX || to_proc->fd_table[fd] == NULL){
         // no file is opened for this fd 
         return EBADF;
     }
@@ -261,7 +261,7 @@ int sys__read(int fd, void * buf, size_t buflen,size_t *retval){
 	// struct uio ku;
     
     // test code 
-    // kprintf("try to read %d \n",fd);
+    kprintf("try to read %d \n",fd);
     // buf = buf;
     // kprintf("with buff len %u \n\n",(unsigned int)buflen);
 
@@ -272,7 +272,9 @@ int sys__read(int fd, void * buf, size_t buflen,size_t *retval){
     struct uio ku;
     struct iovec iov;
 
-    if(curproc->fd_table[fd] == NULL){
+
+    if(fd < 0 || fd >= __OPEN_MAX || curproc->fd_table[fd] == NULL){
+        kprintf("Error with fd %d \n",fd );
         // no file is opened for this fd 
         return EBADF;
     }
@@ -350,7 +352,7 @@ int sys__write(int fd, void * buf, size_t nbytes,size_t *retval){
     struct iovec iov;
 
 
-    if(curproc->fd_table[fd] == NULL){
+    if(fd < 0 || fd >= __OPEN_MAX || curproc->fd_table[fd] == NULL){
         // no file is opened for this fd 
         // kprintf("error with the fd table is nothing there with fd %d \n",fd);
         return EBADF;
@@ -417,7 +419,7 @@ int sys__lseek(int fd,off_t pos, int whence,off_t *retval64){
     // kprintf("with seek mode %d \n\n",whence);
 
     // protect from bad fd
-    if(curproc->fd_table[fd] == NULL){
+    if(fd < 0 || fd >= __OPEN_MAX || curproc->fd_table[fd] == NULL){
         // no file is opened for this fd 
         return EBADF;
     }
@@ -487,6 +489,15 @@ int sys__close(int fd){
 }
 
 int sys__dup2(int oldfd, int newfd, int *retval){
+
+    // the old fd and new fd must be in the range 
+    if(
+        oldfd < 0 || oldfd >= __OPEN_MAX ||
+        newfd < 0 || newfd >= __OPEN_MAX
+    ){
+        return EBADF;
+    }
+
 
     if(curproc->fd_table[oldfd] == NULL){
         // no file is opened for this fd 

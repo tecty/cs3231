@@ -363,5 +363,5 @@ main(int argc, char * argv[])
     }
 
     printf("ALL TESTS PASS\n");
-
+    return 0;
 }

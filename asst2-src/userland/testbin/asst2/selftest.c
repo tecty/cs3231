@@ -72,6 +72,16 @@ main(int argc, char * argv[])
         printf("PASS\n");
     }
 
+    printf("* writing test string again\n");
+    r = write(fd, teststr, strlen(teststr));
+    // printf("* wrote %d bytes\n", r);
+    if (r < 0)
+    {
+        printf("ERROR writing file: %s\n", strerror(errno));
+        exit(1);
+    }
+    printf("PASS\n");
+
     //close the modified file
     printf("* closing file\n");
     close(fd);

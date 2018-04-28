@@ -51,8 +51,6 @@ int ker_open(char * filename, int flags, mode_t mode, int *retval,struct proc * 
 
     // open by vfs call 
     res = vfs_open(filename, flags,mode, &vn);
-    // get the file information by VOP_STAT
-    VOP_STAT(vn, &file_stat);
 
     /*
      * Some file couldn't be open
@@ -82,11 +80,14 @@ int ker_open(char * filename, int flags, mode_t mode, int *retval,struct proc * 
     
     
     if(res){
-        // some error then early return
+        // some error in vfs_open then early return
         // kprintf("Error here with %d \n",res);
         return res;
         
     }
+
+    // get the file information by VOP_STAT
+    VOP_STAT(vn, &file_stat);
 
 
     // kprintf("try to find a slot in oft \n");
@@ -490,6 +491,7 @@ int sys__close(int fd){
 
 int sys__dup2(int oldfd, int newfd, int *retval){
 
+    kprintf ("try to dup old %d new %d \n",oldfd, newfd);
     // the old fd and new fd must be in the range 
     if(
         oldfd < 0 || oldfd >= __OPEN_MAX ||

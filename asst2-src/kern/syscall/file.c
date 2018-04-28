@@ -96,9 +96,6 @@ int ker_open(char * filename, int flags, mode_t mode, int *retval,struct proc * 
             // a empty slot for the open file table
             // malloc a space for the file info 
             of_table[i] = kmalloc(sizeof(struct open_file_info));
-            
-            // unexpect no enough memory space 
-            KASSERT(of_table[i]!= NULL);
             if(of_table[i] == NULL){
                 // return out of memory error
                 res =  ENOMEM;

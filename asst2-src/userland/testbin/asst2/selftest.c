@@ -351,5 +351,6 @@ main(int argc, char * argv[])
         printf("PASS\n");
     }
 
+    printf("ALL TESTS PASS\n");
 
 }

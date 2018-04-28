@@ -175,6 +175,15 @@ int ker__close(int fd, struct proc *to_proc ){
 
     struct open_file_info *cur_ofi = (*to_proc->fd_table[fd]);
 
+
+    // CRITICAL REGION:
+    // changing data structure of OFI must be atomic 
+    lock_acquire(cur_ofi->f_lock);
+
+    // This process should not access the fd after now 
+    // clean the slot of fd table
+    to_proc->fd_table[fd] = NULL;    
+
     // dereference from this fd_table
     cur_ofi->ref_count -- ;
 
@@ -182,14 +191,12 @@ int ker__close(int fd, struct proc *to_proc ){
         /*
          * no more fd_table has reference to this openfile slot
          * close the flie and clean this slot 
-         */
-
-        // acquire the lock incase some proc is write or read
-        lock_acquire(cur_ofi->f_lock);
+        **/
 
         // vfs_close(using_vnode);
         vfs_close(cur_ofi->vn);        
-        
+
+        // CRITICAL REGION END: 
         // release the lock and free the lock 
         // to gently close the file
         lock_release(cur_ofi->f_lock);
@@ -202,9 +209,13 @@ int ker__close(int fd, struct proc *to_proc ){
         cur_ofi = NULL;
 
     }
+    else {
+        // CRITICAL REGION END:
+        // close of this fd is ended
+        lock_release(cur_ofi->f_lock);
 
-    // clean the slot of fd table
-    to_proc->fd_table[fd] = NULL;
+    }
+
 
     // successfully close the file
     return 0;
@@ -279,8 +290,6 @@ int sys__read(int fd, void * buf, size_t buflen,size_t *retval){
     
     res = VOP_READ(cur_ofi->vn , &ku);
 
-    // CRITICAL REGION END:
-    lock_release(cur_ofi->f_lock);
 
     if(res){
         // Error Catch: VOP_READ Error 
@@ -297,6 +306,11 @@ int sys__read(int fd, void * buf, size_t buflen,size_t *retval){
     cur_ofi->f_offset = ku.uio_offset;
     if(*retval ==0 ){
         // didn't read anything, also a successful read
+
+        // CRITICAL REGION END:
+        // with early return 
+        lock_release(cur_ofi->f_lock);
+        
         // return 0
         return res;
     }
@@ -306,7 +320,9 @@ int sys__read(int fd, void * buf, size_t buflen,size_t *retval){
     // copy out the file  to cross the system boundary
     // copy out how much has read from file
     res = copyout((char *)str_buf,buf,*retval);
-    
+    // CRITICAL REGION END:
+    lock_release(cur_ofi->f_lock);
+
     if(res){
         // Error Catch: Invalid filename pointer
         // return the error code assigned by copyinstr()
@@ -369,12 +385,16 @@ int sys__write(int fd, void * buf, size_t nbytes,size_t *retval){
 
     res = VOP_WRITE(cur_ofi->vn , &ku);
     
-    // CIRITICAL REGION REGION:
-    lock_release(cur_ofi->f_lock);
-    
+
     if(res){
         // kprintf("VOP WRITE error with %d\n", res);
+        
+        
         // Error Catch: VOP_WRITE Error 
+        // early return 
+        // CIRITICAL REGION END:
+        lock_release(cur_ofi->f_lock);
+    
         // return the error code from VOP_WRITE
         return res;
     }
@@ -385,6 +405,10 @@ int sys__write(int fd, void * buf, size_t nbytes,size_t *retval){
     // push forward the current file position 
     // by refreshing the value 
     cur_ofi->f_offset = ku.uio_offset;
+
+    // CIRITICAL REGION END:
+    lock_release(cur_ofi->f_lock);
+    
     // return successfully
     return res;
 }
@@ -409,6 +433,11 @@ int sys__lseek(int fd,off_t pos, int whence,off_t *retval64){
         return ESPIPE;
     }
     
+
+    // CRITICAL REGION:
+    // asccess the data struct must be atomic 
+    lock_acquire(cur_ofi->f_lock);
+
     // record the old offse in case it become negative
     // after seeking 
     off_t old_offset = cur_ofi->f_offset;
@@ -436,6 +465,11 @@ int sys__lseek(int fd,off_t pos, int whence,off_t *retval64){
             break;
         default:
             // error seeking by providing wrong whence
+
+            // early return 
+            // CRITICAL REGION END:
+            lock_release(cur_ofi->f_lock);
+    
             return EINVAL;
             break;
     }
@@ -444,13 +478,19 @@ int sys__lseek(int fd,off_t pos, int whence,off_t *retval64){
     if(cur_ofi->f_offset< 0){
         // current offset is negative, reset the position
         cur_ofi->f_offset = old_offset;
+
+        // early return 
+        // CRITICAL REGION END:
+        lock_release(cur_ofi->f_lock);
         return EINVAL;
     }
 
     // to make compiler happy
     // since all the change of retval64 is in switch cases.
     retval64 = retval64;
-
+    // CRITICAL REGION END:
+    lock_release(cur_ofi->f_lock);
+    
     // successful seek 
     return 0;
 
@@ -488,9 +528,19 @@ int sys__dup2(int oldfd, int newfd, int *retval){
     // assign to a duplicate 
     curproc->fd_table[newfd] =curproc->fd_table[oldfd];
 
+    // CRITICAL REGION:
+    // Changing the information in the OFI must be atomic 
+    lock_acquire((*curproc->fd_table[newfd])->f_lock);
+    
+
+
+
     // add a reference count to the ofi 
     (*curproc->fd_table[oldfd])->ref_count ++;
 
+    // CRITICAL REGION END:
+    lock_release((*curproc->fd_table[newfd])->f_lock);
+    
     // successfully do the dup, return the new fd as spec 
     *retval = newfd;
     return 0;

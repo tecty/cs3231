@@ -12,6 +12,7 @@
         "uio.h": "c",
         "fcntl.h": "c",
         "vnode.h": "c",
-        "stattypes.h": "c"
+        "stattypes.h": "c",
+        "thread.h": "c"
     }
 }

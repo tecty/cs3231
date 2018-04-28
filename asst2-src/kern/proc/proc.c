@@ -244,7 +244,10 @@ proc_create_runprogram(const char *name)
 	ker_open(buf, 1,0664, &fd, newproc);
 	KASSERT(fd == 2);
 
-	
+	// if 0 don't need to attach to the stdin 
+	// strcpy(buf, (char *)"con:");
+	// ker__close(buf);
+	// KASSERT(fd == 0);
 
 
 	/*

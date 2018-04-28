@@ -97,6 +97,11 @@ runprogram(char *progname)
 		return result;
 	}
 
+	// the open file descripter is on the proc.c
+	//  proc_create_runprogram()
+	// And we always let the processor have 3 fd after it is initialised
+	// which is 0 -stdin, 1-stdout, 2-stderr
+
 	/* Warp to user mode. */
 	enter_new_process(0 /*argc*/, NULL /*userspace addr of argv*/,
 			  NULL /*userspace addr of environment*/,

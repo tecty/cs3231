@@ -51,33 +51,7 @@ int ker_open(char * filename, int flags, mode_t mode, int *retval,struct proc * 
 
     // open by vfs call 
     res = vfs_open(filename, flags,mode, &vn);
-
-    /*
-     * Some file couldn't be open
-     * return errno and get the vn close
-     *
-     * This couldn't be included
-     * #include <stattypes.h>
-     *  
-    */
-    // switch (file_stat.st_mode&_S_IFMT){
-    //     case _S_IFREG:
-    //         // i can open this type
-    //     break;
-        
-    //     case _S_IFDIR:
-    //     case _S_IFLNK:
-    //     case _S_IFIFO:
-    //     case _S_IFSOCK:
-    //     case _S_IFCHR:
-    //     case _S_IFBLK:
-    //         // I cannot open the file is not regular file
-    //         res = EISDIR;
-    //         goto CATCH_FREE_VNODE;
-    //     break;
-        
-    // }
-    
+   
     
     if(res){
         // some error in vfs_open then early return
@@ -88,6 +62,9 @@ int ker_open(char * filename, int flags, mode_t mode, int *retval,struct proc * 
 
     // get the file information by VOP_STAT
     VOP_STAT(vn, &file_stat);
+
+    // a flag to indicat that the slot has been found
+    int found = 0;
 
 
     // kprintf("try to find a slot in oft \n");
@@ -101,7 +78,10 @@ int ker_open(char * filename, int flags, mode_t mode, int *retval,struct proc * 
                 // return out of memory error
                 res =  ENOMEM;
                 // clean up the vnode
-                goto CATCH_FREE_VNODE;
+                // close the file because it would never been use
+                vfs_close(vn);
+                return res;
+
             }
 
             /*
@@ -143,20 +123,23 @@ int ker_open(char * filename, int flags, mode_t mode, int *retval,struct proc * 
 
             // Successful: break the loop and make a reference in
             // fd table 
-            goto FD_REF;
+            found = 1;
+            break;
         }
     }
+    if(found == 0){
 
-    // Error Catch: No enough file table
-    res = ENFILE;
-    // go to free the vnode that acquire 
-    goto CATCH_FREE_VNODE;
+        // Error Catch: No enough file table
+        res = ENFILE;
+        // go to free the vnode that acquire 
+        // close the file because it would never been use
+        vfs_close(vn);
+        return res;
 
+    }
 
 
     // find an empty slot to store the pointer in fd_table
-FD_REF:
-    // kprintf("try to find a slot in the fdt\n");
     for(int i = 0;i < __OPEN_MAX;i++){
         if(to_proc->fd_table[i]== NULL){
             // malloc a space to store the pin
@@ -177,16 +160,9 @@ FD_REF:
     // overflow the fdtable
     res = EMFILE;
 
-
-
-
     // free the vnode that acquire
-CATCH_FREE_VNODE:
     // close the file because it would never been use
     vfs_close(vn);
-
-    // kprintf("Error here %d \n",res);
-
     return res;
 }
 
@@ -262,7 +238,7 @@ int sys__read(int fd, void * buf, size_t buflen,size_t *retval){
 	// struct uio ku;
     
     // test code 
-    kprintf("try to read %d \n",fd);
+    // kprintf("try to read %d \n",fd);
     // buf = buf;
     // kprintf("with buff len %u \n\n",(unsigned int)buflen);
 
@@ -491,7 +467,6 @@ int sys__close(int fd){
 
 int sys__dup2(int oldfd, int newfd, int *retval){
 
-    kprintf ("try to dup old %d new %d \n",oldfd, newfd);
     // the old fd and new fd must be in the range 
     if(
         oldfd < 0 || oldfd >= __OPEN_MAX ||

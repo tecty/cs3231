@@ -1,1 +1,70 @@
-Place your design document here.
+Design Structure
+Part 1: Identifying basic issues
+We need to design and implement a proper subsystem in kern/arch/mips/syscall/syscall.c. It should  provide a complete kernel-level interface to let the kernel response to all expectable syscalls from the user-level interface (In this assignment, that includes the syscalls which are: read(), write(), open(), close(), lseek() and dup2()). 
+
+The ideal design of this kind of subsystem should: 
+
+    a) Understand all syscall requests from the user-level interface
+    b) Return results that can be accepted by the user-level interface
+    c) Have proper handling methods towards each different syscall
+    d) Properly manage all opening resources used by the user-level interface
+
+Our following issue identifications start with the above consideration.
+
+1. To ensure the security of pointer using in the kernel space, the system should always create a safe copy of the passing user data and use this copy to request usage in the kernel space.
+
+2. To achieve different functionalities defined in the sys/161 man page, we need to implement each type of syscalls in kern/syscall/file.c and declare them in kern/include/file.h to provide entries to these functions. It is required that these syscalls should gracefully handle with all kinds of possible errors with returning correct error code and carry out correct instructions if the call is successful. Thus, we should appropriately invoke the VFS(Virtual File System) and vnode operations to build these syscalls.
+
+3. To maintain the efficiency and correctness of using the public file resources, the subsystem should build up a certain managing and tracking system for all public files that are opened to the user-level interface. The subsystem should be able to track the manipulations of all file-descriptors and opened file information, so that it could always inspect the executability of syscalls and carry them out as instructed. This designing issue deserves further detailed consideration as follows.
+
+    a) The current structure members of a process type are not enough for us to create such a kind of file managing system inside a process. Hence, we need to add new members inside the structure definition of the proc.
+
+    b) We will also need to create a new structure recording all the opened files’ using status(e.g. offset, opening mode, etc.) in the managing system.
+
+4. We believe that two different user-level thread which within same process can find themselves running a system call at the same time. Therefore, we need to figure out a solution to protect the sharing data and file from being corrupted by synchronization.
+
+After identifying all basic issues that need to be resolved in this assignment, we provide our solutions to these issues in the following part.
+
+Part 2: Solutions
+
+In general, we modified and added new codes and files in kern/syscall/file.c, kern/include/file.h, kern/proc/proc.c, kern/include/proc.h and kern\arch\mips\syscall\syscall.c. Our solution to the assignment can be explained in three parts. The first part is building up multiple complete data structures to manage and track the usage details of each opened file. Then we can implement each syscall using the created structures and existing VFS and vnode operations. Finally, we implemented basic protections for preventing possible data corruption in process synchronization.
+
+	The First Part:
+
+    1. We created an ADT called open_file_info in kern\include\file.h. This data struct records detailed information of an opened file, which includes:
+
+        a) The current offset
+        b) The number of being referenced by a file descriptor
+        c) A pointer pointing to the corresponding vnode
+        d) How the file is opened (e.g. read only, write only, read and write, etc.)
+        e) A lock protecting the file from data corruption
+
+    Using this data structure as a cell, we can easily create an open file table (OFT) to let the system manage and track all opened files according to the syscall instructions. The OFT was created and called of_table in kern\include\file.h. It has a fix size of 2 * __IOV_MAX (2048 bytes). 
+
+    2. The OFT we created should be a public resource shared by all processes in the system. It is dangerous and inappropriate to allow the processes to access the table directly. Thus, we designed to build a file descriptor table (FDT) for each process. It was implemented as an array and called fd_table in the data structure of a proc type. Each FDT has a maximum limit which is greater than or equal to __OPEN_MAX (32 bytes). An FDT contains file descriptors (they are actually implemented as pointers) that point to the corresponding pointers of opened files. Therefore, the user-level interface only needs to know or provide which number of the file pointer points to the file they want to manipulate, then the kernel will safely find the correct file and use the VFS and vnode operations to handle with the syscall operations.
+
+	The Second Part:
+
+    Here are the brief introductions of the designs for the six syscall functions. The functions were built in kern\syscall\file.c and called in kern\arch\mips\syscall\syscall.c. It is guaranteed that all syscall functions can detect any possible failures and return the correct error code to the user level.
+
+    1. File-opening functions:
+    We built a ker__open() and a sys__open() for the use of the kernel itself and the syscall system. ker__open() is used for the file descriptor binding for stdin, stdout and stderr (whose file descriptors should be 0, 1 and 2) before any syscalls from the user-level instructions. It uses VFS operations to open a specified file, registers the opened file into the OFT, and returns a valid file descriptor (starting at 3). sys__open() handles the syscalls from the user level and calls ker_open() to open the files. 
+
+    2. File-closing functions:
+    This is similar to the open-file functions. We have a ker__close() and a sys__close for the use of the kernel itself and the syscall system. The functions will clean up the file descriptor in the process and close the file in the OFT if no more file descriptors point to it.
+
+    3. File-reading function:
+    We built a sys__read() to handle with all file reading instructions. The function receives a valid file descriptor and creates a temporary uio structure to read data from the corresponding file. We also built a public buffer str_buf (size of __ARG_MAX (4096 bytes)) in kern\include\file.h to temporarily store the data from/to the file. The function first calls VFS and vnode operations to read the file into str_buf, then copies the data into the buffer provided by the user-level interface.
+
+    4. File-writing function:
+    We built a sys__write() to handle with all file writing instructions. The function receives a valid file descriptor and creates a temporary uio structure to write data from the corresponding file. It first copies the data from the buffer provided by the user-level interface and store it into str_buf, then uses str_buf and VFS/vnode operations to write the data into the file.
+
+    5. File-seeking function:
+    We built a sys__lseek() to modify the current offset in the specified file according to the user-level instruction. The function receives a valid file descriptor, a valid displacement distance and a valid whence to do the modification. It allows the offset to get behind the end of the file, but returns error codes if the offset gets before the start of the file (SEEK_SET).
+
+    6. File-Descriptors-duplicating function:
+    We built a sys__dup2() to duplicate a file descriptor to another file descriptor specified in the syscall parameters. The function receives two file descriptors (oldfd and newfd). oldfd must be a valid file descriptor linking to an opened file. Then the function closes the file pointed by newfd (if it exists) and duplicate the pointer in oldfd into newfd. The OFT also records the new reference of the file.
+
+	The Third Part:
+
+    Finally, we took care about the concurrency issues when facing multi-process running. We created a lock for each opened file in the OFT and used it to protect all the sharing data and ensure the indivisibility of each file operation. 

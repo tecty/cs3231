@@ -1,4 +1,5 @@
-Design Structure
+Design Documents
+
 Part 1: Identifying basic issues
 We need to design and implement a proper subsystem in kern/arch/mips/syscall/syscall.c. It should  provide a complete kernel-level interface to let the kernel response to all expectable syscalls from the user-level interface (In this assignment, that includes the syscalls which are: read(), write(), open(), close(), lseek() and dup2()). 
 

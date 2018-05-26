@@ -15,7 +15,7 @@ void vm_bootstrap(void)
            frame table here as well.
         */
        //initialize the frame table
-       ft_initialize();
+//        ft_initialize();
 }
 
 int

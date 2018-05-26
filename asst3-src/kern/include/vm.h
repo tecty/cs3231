@@ -50,7 +50,7 @@ frame_table ft;
 
 /* Initialize the frame table */
 void ft_initialize(void);
-frame_table next_free_frame();
+frame_table next_free_frame(void);
 paddr_t takemem(unsigned int npages);
 frame_table addressUsed(paddr_t addr);
 

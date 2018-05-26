@@ -101,27 +101,29 @@ vaddr_t alloc_kpages(unsigned int npages)
          */
 
         //return null if number of pages over 1
-        if(npages!=1)
-            return (vaddr_t)NULL;
+        // if(npages!=1)
+        //     return (vaddr_t)NULL;
 
-        //define the result addr
-        frame_table result_frame;
-        //reuse the spinlock for stealmem
-        spinlock_acquire(&stealmem_lock);
-                result_frame = next_free_frame();
-                //all frames are full
-                //out of memory ?
-                if (result_frame == NULL)
-                    return (vaddr_t)NULL;
-                //allocate the new physical memory to the
-                //next free frame
-                //and input the taken addr into a free frame
-                result_frame->p_address = takemem(npages);
-                result_frame->stat = USED;
-        spinlock_release(&stealmem_lock);
+        // //define the result addr
+        // frame_table result_frame;
+        // //reuse the spinlock for stealmem
+        // spinlock_acquire(&stealmem_lock);
+        //         result_frame = next_free_frame();
+        //         //all frames are full
+        //         //out of memory ?
+        //         if (result_frame == NULL)
+        //             return (vaddr_t)NULL;
+        //         //allocate the new physical memory to the
+        //         //next free frame
+        //         //and input the taken addr into a free frame
+        //         result_frame->p_address = takemem(npages);
+        //         result_frame->stat = USED;
+        // spinlock_release(&stealmem_lock);
 
-        //return the address of the allocated frame
-        return PADDR_TO_KVADDR((paddr_t)result_frame);
+        // //return the address of the allocated frame
+        // return PADDR_TO_KVADDR((paddr_t)result_frame);
+        kprintf("alloc %u pages", npages);
+        return 0;
 }
 
 //search a free memory block from the beginning
@@ -154,10 +156,11 @@ frame_table addressUsed(paddr_t addr){
 
 void free_kpages(vaddr_t addr)
 {
-        frame_table frame = addressUsed(addr);
-        //if addr is not found in frame, just return
-        if(frame == NULL) return;
-        //otherwise, free this memory block;
-        frame->stat = FREE;
+        // frame_table frame = addressUsed(addr);
+        // //if addr is not found in frame, just return
+        // if(frame == NULL) return;
+        // //otherwise, free this memory block;
+        // frame->stat = FREE;
+        addr = addr;
 }
 

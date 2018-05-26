@@ -36,6 +36,23 @@
  * You'll probably want to add stuff here.
  */
 
+typedef struct frame_table_entry
+{
+    //the status of this entry (free/used)
+    unsigned short stat;
+    //the physical address it contains
+    paddr_t p_address;
+    //the next free frame table entry
+    struct frame_table_entry *next;
+} *frame_table;
+//the whole frame table
+frame_table ft;
+
+/* Initialize the frame table */
+void ft_initialize(void);
+frame_table next_free_frame();
+paddr_t takemem(unsigned int npages);
+frame_table addressUsed(paddr_t addr);
 
 #include <machine/vm.h>
 
@@ -44,9 +61,8 @@
 #define VM_FAULT_WRITE       1    /* A write was attempted */
 #define VM_FAULT_READONLY    2    /* A write to a readonly page was attempted*/
 
-
-/* Initialization function */
-void vm_bootstrap(void);
+    /* Initialization function */
+    void vm_bootstrap(void);
 
 /* Fault handling function called by trap code */
 int vm_fault(int faulttype, vaddr_t faultaddress);

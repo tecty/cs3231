@@ -14,6 +14,8 @@ void vm_bootstrap(void)
         /* Initialise VM sub-system.  You probably want to initialise your 
            frame table here as well.
         */
+       //initialize the frame table
+       ft_initialize();
 }
 
 int

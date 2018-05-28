@@ -211,7 +211,7 @@ kmalloctest3(int nargs, char **args)
 		if (ptrblocks[i] == NULL) {
 			panic("kmalloctest3: failed on pointer block %u\n", i);
 		}
-	}
+	}	
 
 	/* Allocate the objects. */
 	curblock = 0;

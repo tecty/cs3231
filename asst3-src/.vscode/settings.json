@@ -1,0 +1,9 @@
+{
+    "files.associations": {
+        "addrspace.h": "c",
+        "types.h": "c",
+        "lib.h": "c",
+        "exception": "c",
+        "array": "c"
+    }
+}

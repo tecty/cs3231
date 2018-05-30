@@ -15,25 +15,16 @@
 struct frame_table_entry {
     unsigned int stat;
     vaddr_t mem_addr;
-    struct frame_table_entry * next;
+    // struct frame_table_entry * next;
 };
 
 typedef struct frame_table_entry * frame_table;
-
-struct free_frame_list {
-    frame_table start;
-    frame_table end;
-    long count;
-};
 
 vaddr_t find_next_free_frame(void);
 void clean_memory(vaddr_t mem);
 //the global variable ft for the entire frame_table
 //initialize with zero
 frame_table ft = 0;
-//the global variable free_list recording which frames are free
-//initialize later with ft
-struct free_frame_list free_list;
 
 unsigned int entry_size = sizeof(struct frame_table_entry);
 
@@ -43,6 +34,9 @@ unsigned int ft_used_frame_num;
 
 paddr_t mem_start;
 paddr_t mem_end;
+
+unsigned int next_free;
+unsigned int used_frame_num;
 
 static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
 
@@ -93,33 +87,23 @@ vaddr_t alloc_kpages(unsigned int npages)
             num = num + 1;
         }
 
-        //number of free frames exclude the frames used by ft itself
-        free_list.count = total_frame_num - ft_used_frame_num; 
+        //the next free frame starts from here
+        next_free = num;
+        used_frame_num = ft_used_frame_num;
 
         //relocate the starting memory addr for usable ram (except addr for ft table)
         mem_start = ram_getfirstfree();        
         
-        unsigned int page_start = num;
-        unsigned int previous = num;
         //save the memory usable for other processes
         while(num < total_frame_num){
             //save
             ft[num].stat = FREE;
             ft[num].mem_addr = PADDR_TO_KVADDR(curr_mem);
-            //save into the free list
-            if(num != page_start){ //this is not the head
-                ft[previous].next = &ft[num];
-            }
-            //extend the end of free frame list
-            free_list.end = &ft[num];
+            
             //iterate
-            previous = num;
             curr_mem = curr_mem + PAGE_SIZE;
             num = num + 1;        
         }
-        //the last frame does not have any next frame link
-        ft[num-1].next = 0;
-        free_list.start = &ft[page_start];
         
     }
     else{
@@ -137,19 +121,23 @@ vaddr_t alloc_kpages(unsigned int npages)
 
 //find next available frame
 vaddr_t find_next_free_frame(void){
-    if(free_list.count == 0) return 0; //out of memory
-    //otherwise pop up a free frame from free_list
-    frame_table next_free = free_list.start;
-    if(next_free->next==0){ //this is the last free frame
-        free_list.start = free_list.end = 0;
+    unsigned int old_pos = next_free;
+    if(used_frame_num == total_frame_num) return 0;
+    do{
+        if(ft[next_free].stat==FREE){
+            //found
+            ft[next_free].stat = USED;
+            vaddr_t addr = ft[next_free].mem_addr;
+            //back one frame
+            next_free = (next_free + 1) % total_frame_num;
+            //add new used frame into the total number
+            used_frame_num = used_frame_num + 1;
+            return addr;
+        }
+        next_free = (next_free + 1) % total_frame_num;
     }
-    else{
-        free_list.start = next_free->next;
-    }
-    free_list.count = free_list.count - 1;
-    next_free->stat = USED;
-    next_free->next = 0;
-    return next_free->mem_addr;
+    while(next_free != old_pos);
+    return 0;
 }
 
 void clean_memory(vaddr_t mem){
@@ -167,14 +155,7 @@ void free_kpages(vaddr_t addr)
     ft[pos].stat = FREE;
     clean_memory(ft[pos].mem_addr);    
     spinlock_acquire(&stealmem_lock);
-    if(free_list.count==0){
-        //this is the first newly added free frame
-        free_list.start = free_list.end = &ft[pos];
-    }
-    else{
-        free_list.end->next = &ft[pos];
-    }
-    free_list.count = free_list.count + 1;  
+    used_frame_num = used_frame_num - 1;
     spinlock_release(&stealmem_lock);
     return;
 }

@@ -13,6 +13,16 @@
  * function and call it from vm_bootstrap
  */
 
+//the global variable ft for the entire frame_table
+//initialize with zero
+frame_table ft = 0;
+//the size of frame table
+size_t ft_size;
+
+//the global variable free_list recording which frames are free
+//initialize later with ft
+struct free_frame_list free_list;
+
 //the page used by frame table 
 size_t ft_used_frame_num;
 //the page used by hashed page table 
@@ -162,7 +172,8 @@ void clean_memory(vaddr_t mem){
 void free_kpages(vaddr_t addr)
 {
     paddr_t paddr = KVADDR_TO_PADDR(addr);
-    unsigned int pos = (paddr-mem_start)/PAGE_SIZE + ft_used_frame_num;
+    unsigned int pos = (paddr-mem_start)/PAGE_SIZE + ft_used_frame_num
+                        + hpt_used_frame_num;
     ft[pos].stat = FREE;
     clean_memory(ft[pos].mem_addr);    
     spinlock_acquire(&stealmem_lock);

@@ -66,21 +66,11 @@ struct page_table_entry{
 //page table entry pointer
 typedef struct page_table_entry *page_table;
 
-//the global variable ft for the entire frame_table
-//initialize with zero
-frame_table ft = 0;
-//the size of frame table
-size_t ft_size;
-
 //the global page table
 //initialize later with ft
 page_table hpt;
 //the size of page table 
 size_t hpt_size;
-
-//the global variable free_list recording which frames are free
-//initialize later with ft
-struct free_frame_list free_list;
 
 void reset_hpt(void);
 

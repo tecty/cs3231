@@ -38,9 +38,51 @@
 
 #define PAGE_BITS 12
 
-unsigned int get_total_frame_number(void);
+//the structure of frame table entry
+struct frame_table_entry {
+    unsigned int stat;
+    vaddr_t mem_addr;
+    struct frame_table_entry * next;
+};
+//frame table entry pointer
+typedef struct frame_table_entry * frame_table;
 
-void reset_pt(void);
+//the structure of free frame list
+struct free_frame_list {
+    frame_table start;
+    frame_table end;
+    long count;
+};
+
+//the structure of page table entry
+struct page_table_entry{
+        uint32_t pid; //process identifier
+        vaddr_t page_no; //page number
+        paddr_t frame_no; //frame number
+        uint32_t stat; //status
+        struct page_table_entry * next; //link to handle collisions
+};
+
+//page table entry pointer
+typedef struct page_table_entry *page_table;
+
+//the global variable ft for the entire frame_table
+//initialize with zero
+frame_table ft = 0;
+//the size of frame table
+size_t ft_size;
+
+//the global page table
+//initialize later with ft
+page_table hpt;
+//the size of page table 
+size_t hpt_size;
+
+//the global variable free_list recording which frames are free
+//initialize later with ft
+struct free_frame_list free_list;
+
+void reset_hpt(void);
 
 #include <machine/vm.h>
 
@@ -59,6 +101,8 @@ int vm_fault(int faulttype, vaddr_t faultaddress);
 /* Allocate/free kernel heap pages (called by kmalloc/kfree) */
 vaddr_t alloc_kpages(unsigned npages);
 void free_kpages(vaddr_t addr);
+vaddr_t find_next_free_frame(void);
+void clean_memory(vaddr_t mem);
 
 /* TLB shootdown handling called from interprocessor_interrupt */
 void vm_tlbshootdown(const struct tlbshootdown *);

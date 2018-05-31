@@ -12,34 +12,11 @@
  * You probably also want to write a frametable initialisation
  * function and call it from vm_bootstrap
  */
-struct frame_table_entry {
-    unsigned int stat;
-    vaddr_t mem_addr;
-    struct frame_table_entry * next;
-};
 
-typedef struct frame_table_entry * frame_table;
-
-struct free_frame_list {
-    frame_table start;
-    frame_table end;
-    long count;
-};
-
-vaddr_t find_next_free_frame(void);
-void clean_memory(vaddr_t mem);
-//the global variable ft for the entire frame_table
-//initialize with zero
-frame_table ft = 0;
-//the global variable free_list recording which frames are free
-//initialize later with ft
-struct free_frame_list free_list;
-
-unsigned int entry_size = sizeof(struct frame_table_entry);
-
-//these numbers will be initialized when ft is initialized
-unsigned int total_frame_num;
-unsigned int ft_used_frame_num;
+//the page used by frame table 
+size_t ft_used_frame_num;
+//the page used by hashed page table 
+size_t hpt_used_frame_num;
 
 paddr_t mem_start;
 paddr_t mem_end;
@@ -63,7 +40,7 @@ vaddr_t alloc_kpages(unsigned int npages)
 
     if(ft == 0){
         //ft is not placed well in ram
-        //initialize ft
+        //initialize ft and hpt
         //use ram_stealmem
         //initializing cannot be synchronized hence don't need lock
         
@@ -72,13 +49,20 @@ vaddr_t alloc_kpages(unsigned int npages)
         mem_end = ram_getsize();
         
         //find how many pages are needed to save the frame table
-        total_frame_num = (unsigned int)(mem_end - mem_start)/PAGE_SIZE;
+        ft_size = (size_t)(mem_end - mem_start)/PAGE_SIZE;
+        ft_used_frame_num = (ft_size * sizeof(struct frame_table_entry) + PAGE_SIZE - 1)/ PAGE_SIZE;
+        
+        //find how many pages are needed to save the hashed page table
+        //the size of page table doubles the size of frame table
+        hpt_size = (size_t)ft_size * 2; 
+        hpt_used_frame_num = (hpt_size * sizeof(struct page_table_entry) + PAGE_SIZE - 1)/ PAGE_SIZE;
 
-        ft_used_frame_num = total_frame_num * entry_size / PAGE_SIZE + 1;
-
-        //get addr for frame table
-        ft = (struct frame_table_entry *)PADDR_TO_KVADDR(ram_stealmem(ft_used_frame_num));
-
+        //get addr for frame table and hashed page table
+        ft = (frame_table)PADDR_TO_KVADDR(ram_stealmem(ft_used_frame_num));
+        if(ft==0) return 0;
+        hpt = (page_table)PADDR_TO_KVADDR(ram_stealmem(hpt_used_frame_num));
+        if(hpt==0) return 0;
+        
         //save the memory used by ft itself in the table 
         unsigned int num = 0;
         paddr_t curr_mem = mem_start;
@@ -92,17 +76,29 @@ vaddr_t alloc_kpages(unsigned int npages)
             curr_mem = curr_mem + PAGE_SIZE;
             num = num + 1;
         }
+        
+        //save the memory used by hashed page table in the table
+        while(num < ft_used_frame_num + hpt_used_frame_num){
+            //save
+            ft[num].stat = USED;
+            ft[num].mem_addr = PADDR_TO_KVADDR(curr_mem);
+            
+            //iterate
+            curr_mem = curr_mem + PAGE_SIZE;
+            num = num + 1;
+        } 
+        
+        //number of free frames exclude the frames used by ft and hpt
+        free_list.count = ft_size - ft_used_frame_num - hpt_used_frame_num; 
 
-        //number of free frames exclude the frames used by ft itself
-        free_list.count = total_frame_num - ft_used_frame_num; 
-
-        //relocate the starting memory addr for usable ram (except addr for ft table)
+        //relocate the starting memory addr for usable ram (except addr for ft table and hpt table)
+        //from now on, stealmem will fail
         mem_start = ram_getfirstfree();        
         
         unsigned int page_start = num;
         unsigned int previous = num;
         //save the memory usable for other processes
-        while(num < total_frame_num){
+        while(num < ft_size){
             //save
             ft[num].stat = FREE;
             ft[num].mem_addr = PADDR_TO_KVADDR(curr_mem);
@@ -119,8 +115,10 @@ vaddr_t alloc_kpages(unsigned int npages)
         }
         //the last frame does not have any next frame link
         ft[num-1].next = 0;
-        free_list.start = &ft[page_start];
+        free_list.start = &ft[page_start];  
         
+        //reset hpt
+        reset_hpt(); 
     }
     else{
         //assume one page at a time
@@ -156,16 +154,10 @@ void clean_memory(vaddr_t mem){
     void * ptr;
     ptr = (void *)mem;
     //clean the memory byte by byte
-    memset(ptr, 0, PAGE_SIZE);
-    //bzero();
+    //memset(ptr, 0, PAGE_SIZE);
+    bzero(ptr, PAGE_SIZE);
 }
 
-//this function can only be used after initialization
-//it will give a reference size when boot functions decide the size of the 
-//global page table
-unsigned int get_total_frame_number(void){
-    return total_frame_num;
-}
 
 void free_kpages(vaddr_t addr)
 {

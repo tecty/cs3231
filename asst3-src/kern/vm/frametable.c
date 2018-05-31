@@ -128,7 +128,7 @@ vaddr_t alloc_kpages(unsigned int npages)
         free_list.start = &ft[page_start];  
         
         //reset hpt
-        reset_hpt(); 
+        hpt_reset(); 
     }
     else{
         //assume one page at a time

@@ -35,8 +35,13 @@
  *
  * You'll probably want to add stuff here.
  */
-
 #define PAGE_BITS 12
+#define VALID_BYTE 0xfffffff0 //mask to get the final byte from paddr
+
+//state of the page table
+#define SWAPPED 2
+#define MAPPED 1
+#define UNMAPPED 0
 
 //the structure of frame table entry
 struct frame_table_entry {
@@ -55,12 +60,13 @@ struct free_frame_list {
 };
 
 //the structure of page table entry
+//now is 4 * 32 byte size
+//frame_no will wipe up the last 12 bits and add the page table state instead
 struct page_table_entry{
-        uint32_t pid; //process identifier
-        vaddr_t page_no; //page number
-        paddr_t frame_no; //frame number
-        uint32_t stat; //status
-        struct page_table_entry * next; //link to handle collisions
+    uint32_t pid; //process identifier
+    vaddr_t page_no; //page number
+    paddr_t frame_no; //frame number //probably contain
+    struct page_table_entry * next; //link to handle collisions
 };
 
 //page table entry pointer
@@ -71,8 +77,6 @@ typedef struct page_table_entry *page_table;
 page_table hpt;
 //the size of page table 
 size_t hpt_size;
-
-void reset_hpt(void);
 
 #include <machine/vm.h>
 
@@ -96,6 +100,11 @@ void clean_memory(vaddr_t mem);
 
 /* TLB shootdown handling called from interprocessor_interrupt */
 void vm_tlbshootdown(const struct tlbshootdown *);
+
+
+uint32_t hpt_hash(struct addrspace *as, vaddr_t faultaddr);
+uint32_t hpt_find_hash(struct addrspace *as, vaddr_t faultaddr, bool result);
+void hpt_reset(void);
 
 
 #endif /* _VM_H_ */

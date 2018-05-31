@@ -10,6 +10,7 @@ main.o: ../../main/main.c ../../include/types.h \
  ../../include/setjmp.h includelinks/kern/machine/setjmp.h \
  ../../include/proc.h ../../include/current.h \
  includelinks/machine/current.h ../../include/synch.h ../../include/vm.h \
- includelinks/machine/vm.h ../../include/mainbus.h ../../include/vfs.h \
- ../../include/device.h ../../include/pid.h ../../include/syscall.h \
- ../../include/test.h ../../include/version.h autoconf.h
+ ../../include/addrspace.h opt-dumbvm.h includelinks/machine/vm.h \
+ ../../include/mainbus.h ../../include/vfs.h ../../include/device.h \
+ ../../include/pid.h ../../include/syscall.h ../../include/test.h \
+ ../../include/version.h autoconf.h

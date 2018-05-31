@@ -49,12 +49,11 @@ struct vnode;
  */
 
 struct region {
-        vaddr_t mem_addr;
+        vaddr_t vbase;
         size_t size;
-        size_t npages;
-        bool read;
-        bool writ;
-        bool exec;
+        uint32_t readable;
+        uint32_t writeable;
+        uint32_t executable; 
         struct region * next;
 };
 
@@ -68,12 +67,11 @@ struct addrspace {
         size_t as_npages2;
         paddr_t as_stackpbase;
 #else
-        //addrspace is composed of multiple region
-        struct region *start_region;
-        //skip the middle heap part
-        vaddr_t heap_start;
-        vaddr_t heap_end;
-        struct region *stack_region;
+        // addrspace is composed of multiple regions
+        struct region *region regions;
+        // struct region *text_region;
+        // struct region *data_region;
+        // struct region *stack_region;
 #endif
 };
 

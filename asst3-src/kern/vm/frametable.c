@@ -160,6 +160,13 @@ void clean_memory(vaddr_t mem){
     //bzero();
 }
 
+//this function can only be used after initialization
+//it will give a reference size when boot functions decide the size of the 
+//global page table
+unsigned int get_total_frame_number(void){
+    return total_frame_num;
+}
+
 void free_kpages(vaddr_t addr)
 {
     paddr_t paddr = KVADDR_TO_PADDR(addr);
@@ -173,6 +180,8 @@ void free_kpages(vaddr_t addr)
     }
     else{
         free_list.end->next = &ft[pos];
+        //extend free_list
+        free_list.end = &ft[pos];
     }
     free_list.count = free_list.count + 1;  
     spinlock_release(&stealmem_lock);

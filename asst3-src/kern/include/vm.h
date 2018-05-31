@@ -36,6 +36,11 @@
  * You'll probably want to add stuff here.
  */
 
+#define PAGE_BITS 12
+
+unsigned int get_total_frame_number(void);
+
+void reset_pt(void);
 
 #include <machine/vm.h>
 

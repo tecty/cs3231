@@ -152,6 +152,8 @@ ram_getfirstfree(void)
 	return ret;
 }
 
+//a self-defined function for getting starting address of the current usable 
+//memories
 paddr_t
 ram_getcurrentfirst(void)
 {

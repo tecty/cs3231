@@ -48,6 +48,16 @@ struct vnode;
  * You write this.
  */
 
+struct region {
+        vaddr_t mem_addr;
+        size_t size;
+        size_t npages;
+        bool read;
+        bool writ;
+        bool exec;
+        struct region * next;
+};
+
 struct addrspace {
 #if OPT_DUMBVM
         vaddr_t as_vbase1;
@@ -58,7 +68,12 @@ struct addrspace {
         size_t as_npages2;
         paddr_t as_stackpbase;
 #else
-        /* Put stuff here for your VM system */
+        //addrspace is composed of multiple region
+        struct region *start_region;
+        //skip the middle heap part
+        vaddr_t heap_start;
+        vaddr_t heap_end;
+        struct region *stack_region;
 #endif
 };
 

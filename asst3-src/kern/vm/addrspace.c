@@ -62,6 +62,9 @@ as_create(void)
          * Initialize as needed.
          */
 
+        // as->start_region = NULL;
+        // as->heap_start = 0;
+        // as->heap_end = 0;
         return as;
 }
 
@@ -69,7 +72,7 @@ int
 as_copy(struct addrspace *old, struct addrspace **ret)
 {
         struct addrspace *newas;
-
+        old = old;
         newas = as_create();
         if (newas==NULL) {
                 return ENOMEM;
@@ -79,7 +82,42 @@ as_copy(struct addrspace *old, struct addrspace **ret)
          * Write this.
          */
 
-        (void)old;
+        // struct region *region_orig_ptr = old->start_region;
+        // struct region *region_copy_ptr = ret->start_region;
+
+        // while(region_orig_ptr!=NULL){
+        //         //malloc the copy's own memory space
+        //         //at the head of all regions
+        //         if(region_copy_ptr==NULL){
+        //                 region_copy_ptr = kmalloc(sizeof(struct region));
+        //                 if(region_copy_ptr==NULL){
+        //                         return ENOMEM;
+        //                 }
+        //         }
+        //         //not at the head, current pointer already have memory
+        //         //move to the next pointer
+        //         else{
+        //                 region_copy_ptr->next = kmalloc(sizeof(struct region));
+        //                 if(region_copy_ptr->next==NULL){
+        //                         return ENOMEM;
+        //                 }
+        //                 region_copy_ptr = region_copy_ptr->next;
+        //         }
+        //         //do the full copy
+        //         region_copy_ptr->mem_addr = region_orig_ptr->mem_addr;
+        //         region_copy_ptr->size = region_orig_ptr->size;
+        //         region_copy_ptr->npages = region_orig_ptr->npages;
+        //         region_copy_ptr->read = region_orig_ptr->read;
+        //         region_copy_ptr->writ = region_orig_ptr->writ;
+        //         region_copy_ptr->exec = region_orig_ptr->exec;
+        //         region_copy_ptr->next = NULL; //this is not assigned yet
+
+        //         //iterate
+        //         region_orig_ptr = region_orig_ptr->next;              
+        // }
+
+        // newas->heap_start = old->heap_start;
+        // newas->heap_end = old->heap_end;
 
         *ret = newas;
         return 0;
@@ -91,7 +129,18 @@ as_destroy(struct addrspace *as)
         /*
          * Clean up as needed.
          */
-
+        //clean all region malloc'd
+        // struct region *reg_ptr = as->start_region;
+        // struct region *prev_reg_ptr = NULL;
+        // while(reg_ptr!=NULL){
+        //         prev_reg_ptr = reg_ptr;
+        //         reg_ptr = reg_ptr->next;
+        //         //wipe up all connections in the page table
+        //         size_t num = 0;
+        //         while(num < npages){
+                        
+        //         }
+        // }
         kfree(as);
 }
 

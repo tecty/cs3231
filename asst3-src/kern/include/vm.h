@@ -65,7 +65,7 @@ struct free_frame_list {
 struct page_table_entry{
     uint32_t pid; //process identifier
     vaddr_t page_no; //page number
-    paddr_t frame_no; //frame number //probably contain
+    paddr_t frame_no; //frame number 
     struct page_table_entry * next; //link to handle collisions
 };
 

@@ -55,6 +55,9 @@ struct region {
         uint32_t writeable;
         uint32_t executable; 
         struct region * next;
+
+        //this is for recording the original stat of writable
+        uint32_t orig_writeable;
 };
 
 struct addrspace {

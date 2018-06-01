@@ -16,13 +16,15 @@ size_t page_entry_size = sizeof(struct page_table_entry);
 uint32_t hpt_next_free(bool *flag){
     uint32_t index = 0;
     while(index < hpt_size){
-        if(hpt[size].frame_no & ~ VALID_BYTE == 0){
+        //find the first invalid page to be the new page
+        if(hpt[size].frame_no & TLBLO_VALID != TLBLO_VALID){
             *flag = true;
             return index;
         }
         //iterate
         index = index + 1;
     }
+    //not found
     *flag = false;
     return index;
 }
@@ -35,8 +37,10 @@ void hpt_reset(void){
     while(num < hpt_size){
         //clean
         spinlock_acquire(&pt_lock);
+        //clean all internal chaining
         hpt[num].next = NULL;
-        hpt[num].stat = 0;
+        //set all page-frame linking to be invalid
+        hpt[num].frame_no & PAGE_FRAME;
         spinlock_release(&pt_lock);
         //iterate
         num = num + 1;
@@ -66,18 +70,31 @@ int hpt_fetch_frame(int index, uint32_t dirty){
 //hash and jump collision
 //check existing hash
 uint32_t hpt_find_hash(struct addrspace *as, vaddr_t faultaddr, bool *result){
+    //basic starting hash number
     uint32_t index = hpt_hash(as, faultaddr);
-    while(hpt[index].pid!=(uint32_t)as || hpt[index].page_no!=faultaddr){
+    //prev_no is used to record where the internal chaining is from 
+    //(what is the previous hash number)
+    uint32_t prev_no = index;
+    //use internal chaining to check the right position for as-faultaddr
+    while(hpt[index].pid!=(uint32_t)as || 
+        hpt[index].page_no!= (faultaddr & PAGE_FRAME)){
         //should find the next internal chaining
-        if(hpt[index].next == NULL){
+        if(hpt[index].frame_no & TLBLO_VALID != TLBLO_VALID){
+            //hit an invalid page-frame linking 
+            //hpt entry not found
+            *result = false;
+            return prev_no; 
+        }
+        else if(hpt[index].next == NULL){
             //no further internal chaining
             //hpt entry not found
             *result = false;
-            return index;
+            return prev_no;
         }
         else{
             //go to next internal chaining to check
             //iterate
+            prev_no = index;
             index = (hpt[index].next - hpt)/sizeof(struct page_table_entry);
         }
     }
@@ -85,16 +102,16 @@ uint32_t hpt_find_hash(struct addrspace *as, vaddr_t faultaddr, bool *result){
     //the current entry should have the right index
     paddr_t paddr = hpt[index].frame_no;
     //check if it is valid
-    if(paddr & ~VALID_BYTE == 1){ //valid
+    if(paddr & TLBLO == TLBLO){ //valid
         //copy offset from page_no
         *result = true;
+        return index;
     }
     else{  //this addr is not valid
         *result = false;
+        return prev_no;
     }
-    return index;
 }
-
 
 void vm_bootstrap(void)
 {
@@ -126,13 +143,18 @@ vm_fault(int faulttype, vaddr_t faultaddress)
     int result; //returning result
 
     //handling function
+    //now it handles readonly, read and write fault
     switch(faulttype){
-        case VM_FAULT_READONLY: return EFAULT;
+        case VM_FAULT_READONLY: 
+            return EFAULT;
         case VM_FAULT_READ:
-        case VM_FAULT_WRITE: break;
-        default: return EINVAL;
+        case VM_FAULT_WRITE:
+            break;
+        default: 
+            return EINVAL;
     }
 
+    //check the validity of current process
     if(curproc==NULL){
         return EFAULT;
     }
@@ -145,17 +167,21 @@ vm_fault(int faulttype, vaddr_t faultaddress)
     //now find the result
     paddr = KVADDR_TO_PADDR(faultaddress);
 
+    spinlock_acquire(&pt_lock);
     result = hpt_find_hash(as, faultaddress, &found_flag);
-    if(found_flag) return result; //found in pagetable
+    if(found_flag){
+        spinlock_release(&pt_lock);
+        return result; //found in pagetable
+    }
 
     //if not found
     //we first check if the address is a valid virtual addr inside a region
     struct region *ptr = as->regions;
     while(ptr!=NULL){
-        //found
+        //find which region it is in
         if(faultaddress >= ptr->vbase && faultaddress < (ptr->vbase + pre->size){
             //set the dirty bit if the region is writable
-            if(ptr->writable != 0){
+            if(ptr->writeable != 0){
                 dirty = TLBLO_DIRTY;
             }
             else{
@@ -167,21 +193,35 @@ vm_fault(int faulttype, vaddr_t faultaddress)
         ptr = ptr->next;
     }
     //if not found, return bad memory error 
-    if(ptr==NULL) return EFAULT;
+    if(ptr==NULL){
+        spinlock_release(&pt_lock);
+        return EFAULT;
+    }
     //otherwise we put it into hpt as a new entry
     uint32_t next = hpt_next_free(found_flag);
     if(found_flag==true){ //find pagetable allocatable
         //allocate a frame entry
         int ret = hpt_fetch_frame(next, dirty);
         if(ret){
-            return ret; //no frame allocatable
+            //no enough frame memory to allocate
+            spinlock_release(&pt_lock);
+            return ret;
         }
         //otherwise continue
         hpt[next].pid = (uint32_t)as;
         hpt[next].page_no = faultaddress;
+        if(result!=next) {
+            //there is an internal chaining happen
+            //add this new page to the next pointer in the previoud page
+            hpt[result].next = &hpt[next];
+        }
+        spinlock_release(&pt_lock);
     }
     else{
-        return ENOMEM; //no enough pagetable mem
+        //no enough pagetable mem
+        //stop input and return error
+        spinlock_release(&pt_lock);
+        return ENOMEM; 
     }
 
     //Entry high is the virtual addr and ASID
@@ -206,5 +246,14 @@ vm_tlbshootdown(const struct tlbshootdown *ts)
 {
         (void)ts;
         panic("vm tried to do tlb shootdown?!\n");
+}
+
+//this function is used for flushing the entire TLB
+void vm_tlbflush(){
+	int i;
+	//flush the whole tlb by filling invalid data to each cell of TLB
+	for(i = 0; i < NUM_TLB; i++){
+		tlb_write(TLBHI_INVALID(), TLBLO_INVALID(), i);
+	}
 }
 

@@ -2,7 +2,8 @@
 #include <kern/errno.h>
 #include <lib.h>
 #include <thread.h>
-
+#include <spl.h>
+#include <proc.h>
 #include <vm.h>
 #include <machine/tlb.h>
 
@@ -17,7 +18,7 @@ uint32_t hpt_next_free(bool *flag){
     uint32_t index = 0;
     while(index < hpt_size){
         //find the first invalid page to be the new page
-        if(hpt[size].frame_no & TLBLO_VALID != TLBLO_VALID){
+        if((hpt[index].frame_no & TLBLO_VALID)!= TLBLO_VALID){
             *flag = true;
             return index;
         }
@@ -40,7 +41,7 @@ void hpt_reset(void){
         //clean all internal chaining
         hpt[num].next = NULL;
         //set all page-frame linking to be invalid
-        hpt[num].frame_no & PAGE_FRAME;
+        hpt[num].frame_no = hpt[num].frame_no & PAGE_FRAME;
         spinlock_release(&pt_lock);
         //iterate
         num = num + 1;
@@ -67,6 +68,24 @@ int hpt_fetch_frame(int index, uint32_t dirty){
     return 0;
 }
 
+//check if the frame can be retrived as free frames in hpt
+void clean_frame(paddr_t paddr){
+    bool clean = true;
+    uint32_t i;
+    for(i = 0; i<hpt_size; i++){
+        if((hpt[i].frame_no & PAGE_FRAME) == (paddr & PAGE_FRAME)){
+            if((hpt[i].frame_no & TLBLO_VALID) == TLBLO_VALID){
+                //this page is still using this frame
+                clean = false;
+            }
+        }
+    }
+    if(clean==true){ 
+        //no other page table needs this frame, clean it
+        free_kpages(PADDR_TO_KVADDR(paddr & PAGE_FRAME));
+    }
+}
+
 //hash and jump collision
 //check existing hash
 uint32_t hpt_find_hash(struct addrspace *as, vaddr_t faultaddr, bool *result){
@@ -79,7 +98,7 @@ uint32_t hpt_find_hash(struct addrspace *as, vaddr_t faultaddr, bool *result){
     while(hpt[index].pid!=(uint32_t)as || 
         hpt[index].page_no!= (faultaddr & PAGE_FRAME)){
         //should find the next internal chaining
-        if(hpt[index].frame_no & TLBLO_VALID != TLBLO_VALID){
+        if((hpt[index].frame_no & TLBLO_VALID) != TLBLO_VALID){
             //hit an invalid page-frame linking 
             //hpt entry not found
             *result = false;
@@ -102,7 +121,7 @@ uint32_t hpt_find_hash(struct addrspace *as, vaddr_t faultaddr, bool *result){
     //the current entry should have the right index
     paddr_t paddr = hpt[index].frame_no;
     //check if it is valid
-    if(paddr & TLBLO == TLBLO){ //valid
+    if((paddr & TLBLO_VALID) == TLBLO_VALID){ //valid
         //copy offset from page_no
         *result = true;
         return index;
@@ -134,13 +153,11 @@ vm_fault(int faulttype, vaddr_t faultaddress)
     //tlb entry lo
     uint32_t entry_lo;
     //dirty bit
-    uint32_t dirty;
-    //result paddr
-    paddr_t paddr;
+    uint32_t dirty = 0;
 
     //flag recording the tlb searching result
     bool found_flag = false;
-    int result; //returning result
+    uint32_t result; //returning result
 
     //handling function
     //now it handles readonly, read and write fault
@@ -155,17 +172,10 @@ vm_fault(int faulttype, vaddr_t faultaddress)
     }
 
     //check the validity of current process
-    if(curproc==NULL){
-        return EFAULT;
-    }
-
     struct addrspace *as = proc_getas();
-    if(cur_as == NULL){
+    if(as == NULL){
         return EFAULT;
     }
-
-    //now find the result
-    paddr = KVADDR_TO_PADDR(faultaddress);
 
     spinlock_acquire(&pt_lock);
     result = hpt_find_hash(as, faultaddress, &found_flag);
@@ -179,7 +189,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
     struct region *ptr = as->regions;
     while(ptr!=NULL){
         //find which region it is in
-        if(faultaddress >= ptr->vbase && faultaddress < (ptr->vbase + pre->size){
+        if(faultaddress >= ptr->vbase && faultaddress < (ptr->vbase + ptr->size)){
             //set the dirty bit if the region is writable
             if(ptr->writeable != 0){
                 dirty = TLBLO_DIRTY;
@@ -198,7 +208,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
         return EFAULT;
     }
     //otherwise we put it into hpt as a new entry
-    uint32_t next = hpt_next_free(found_flag);
+    uint32_t next = hpt_next_free(&found_flag);
     if(found_flag==true){ //find pagetable allocatable
         //allocate a frame entry
         int ret = hpt_fetch_frame(next, dirty);
@@ -209,7 +219,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
         }
         //otherwise continue
         hpt[next].pid = (uint32_t)as;
-        hpt[next].page_no = faultaddress;
+        hpt[next].page_no = faultaddress & PAGE_FRAME;
         if(result!=next) {
             //there is an internal chaining happen
             //add this new page to the next pointer in the previoud page
@@ -225,12 +235,12 @@ vm_fault(int faulttype, vaddr_t faultaddress)
     }
 
     //Entry high is the virtual addr and ASID
-    entry_hi = faultaddress & PAGE_FRAME;
+    entry_hi = hpt[next].page_no;
     //Entry lo is physical frame, dirty bit and valid bit
     entry_lo = hpt[next].frame_no;
 
     /* Disable interrupts on this CPU while frobbing the TLB. */
-	spl = splhigh();
+	int spl = splhigh();
     tlb_random(entry_hi, entry_lo);
 	splx(spl);
 	return 0;
@@ -249,11 +259,11 @@ vm_tlbshootdown(const struct tlbshootdown *ts)
 }
 
 //this function is used for flushing the entire TLB
-void vm_tlbflush(){
+void vm_tlbflush(void){
 	int i;
 	//flush the whole tlb by filling invalid data to each cell of TLB
 	for(i = 0; i < NUM_TLB; i++){
-		tlb_write(TLBHI_INVALID(), TLBLO_INVALID(), i);
+		tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
 	}
 }
 

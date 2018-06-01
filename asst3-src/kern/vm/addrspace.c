@@ -48,6 +48,9 @@
  *
  */
 
+//global lock used in addrspace
+static struct spinlock as_lock;
+
 struct addrspace *
 as_create(void)
 {
@@ -100,8 +103,9 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 		//copy data
 		new_reg->vbase = ptr->vbase;
 		new_reg->size = ptr->size;
+		new_reg->npages = ptr->npages;
 		new_reg->readable = ptr->readable;
-		new_reg->writable = ptr->writable;
+		new_reg->writeable = ptr->writeable;
 		new_reg->executable = ptr->executable;
 		//original records
 		new_reg->orig_writeable = ptr->orig_writeable;
@@ -118,30 +122,42 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 		}
 
 		//now add corresponding new page-frame matching in hpt
-		//we first find the hash value of this pid/vaddr binding
-		bool found_flag;
-		//find out which frame is bound to the region in old addrspace
-		int old_result = hpt_find_hash(old, ptr->vbase, &found_flag);
-		//found_flag must be true
-		KASSERT(found_flag==true);
-		paddr_t paddr = hpt[old_result].frame_no;
+		size_t i;
+		for(i=0; i < new_reg->npages; i++){
+			//we first find the hash value of this pid/vaddr binding
+			bool found_flag;
+			//this is the vaddr of the page
+			vaddr_t vbase = ptr->vbase + i * PAGE_SIZE;
+			//find out which frame is bound to the region in old addrspace
+			spinlock_acquire(&as_lock);
+			uint32_t old_result = hpt_find_hash(old, vbase, &found_flag);
+			//found_flag must be true
+			KASSERT(found_flag==true);
+			paddr_t paddr = hpt[old_result].frame_no;
 
-		int result = hpt_find_hash(newas, new_reg->vbase, &found_flag);
-		//found_flag must be false because this is a new reg
-		KASSERT(found_flag==false);
-		uint32_t next = hpt_next_free(found_flag);
-		if(found_flag==false){
-			//no more page able to save the new region
-			//all generation of newas fails
-			as_destroy(newas);
-			return ENOMEM;
+			uint32_t result = hpt_find_hash(newas, vbase, &found_flag);
+			//found_flag must be false because this is a new reg
+			KASSERT(found_flag==false);
+			uint32_t next = hpt_next_free(&found_flag);
+			if(found_flag==false){
+				//no more page able to save the new region
+				//all generation of newas fails
+				spinlock_release(&as_lock);
+				as_destroy(newas);
+				return ENOMEM;
+			}
+			//otherwise bind the new link
+			hpt[next].pid = (uint32_t)newas;
+			hpt[next].page_no = vbase & PAGE_FRAME;
+			//connect to the same frame connected by old addrspace
+			int dirty = paddr & TLBLO_DIRTY;
+			hpt[next].frame_no = paddr | dirty | TLBLO_VALID; 
+			if(result!=next){
+				//there is an internal chaining happen
+				hpt[result].next = &hpt[next];
+			}
+			spinlock_release(&as_lock);
 		}
-		//otherwise bind the new link
-		hpt[next].pid = (uint32_t)newas;
-		hpt[next].page_no = new_reg->vbase;
-		//connect to the same frame connected by old addrspace
-		int dirty = paddr & TLBLO_DIRTY;
-		hpt[next].frame_no = paddr | dirty | TLBLO_VALID; 
 
 		//iterate
 		new_regions = new_reg;
@@ -159,16 +175,16 @@ as_destroy(struct addrspace *as)
 	/*
 	* Clean up as needed.
 	*/
-	//clean up page tables
-	int i;
 	//get the pid of current addrspace
 	uint32_t pid = (uint32_t)as;
+	//clean up all page tables under this pid
+	uint32_t i;
 	for(i = 0; i < hpt_size; i++){
 		if(hpt[i].pid==pid){
-			//free the linked frame
-			free_kpages(PADDR_TO_KVADDR(hpt[i].frame_no & PAGE_FRAME));
 			//set this block invalid
-			hpt[i].frame_no & VALID_BYTE; //set not valid
+			hpt[i].frame_no = hpt[i].frame_no & ~TLBLO_VALID;
+			//check if needs to free the linked frame
+			clean_frame(hpt[i].frame_no);
 		}
 	}
 	kfree(as);
@@ -182,9 +198,9 @@ as_activate(void)
 	as = proc_getas();
 	if (as == NULL) {
 		/*
-			* Kernel thread without an address space; leave the
-			* prior address space in place.
-			*/
+		* Kernel thread without an address space; leave the
+		* prior address space in place.
+		*/
 		return;
 	}
 
@@ -257,6 +273,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 	//input detail of reg
 	reg->vbase = vaddr;
 	reg->size = memsize;
+	reg->npages = npages;
 	reg->readable = readable;
 	reg->writeable = writeable;
 	reg->executable = executable;
@@ -274,14 +291,14 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 		struct region * cur_reg = as->regions;
 		struct region * prev_reg = as->regions;
 
-		while(cur_reg != NULL && cur->vbase < reg->vbase){
+		while(cur_reg != NULL && cur_reg->vbase < reg->vbase){
 			//iterate to find the point
 			prev_reg = cur_reg;
 			cur_reg = cur_reg->next;
 		}
 
-		//now find the point
-		prev->next = reg;
+		//locate the correct point
+		prev_reg->next = reg;
 	}
 	return 0; //success adding and return
 }
@@ -297,7 +314,7 @@ as_prepare_load(struct addrspace *as)
 	struct region *cur_reg = as->regions;
 
 	while(cur_reg!=NULL){
-		cur_reg->writable = 1;
+		cur_reg->writeable = 1;
 		cur_reg = cur_reg->next;
 	}
 
@@ -315,7 +332,7 @@ as_complete_load(struct addrspace *as)
 
 	struct region *cur_reg = as->regions;
 	while(cur_reg!=NULL){
-		cur_reg->writable = cur_reg->orig_writable;
+		cur_reg->writeable = cur_reg->orig_writeable;
 		cur_reg = cur_reg->next;
 	}
 
@@ -343,8 +360,8 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 				1, 1, 1);
 
 	//check if define succussful
-	if(result){
-		return result;
+	if(res){
+		return res;
 	}
 
 	/* Initial user-level stack pointer */

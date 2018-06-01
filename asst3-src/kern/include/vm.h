@@ -35,13 +35,12 @@
  *
  * You'll probably want to add stuff here.
  */
-#define PAGE_BITS 12
-#define VALID_BYTE 0xfffffff0 //mask to get the final byte from paddr
 
-//state of the page table
-#define SWAPPED 2
-#define MAPPED 1
-#define UNMAPPED 0
+#include "addrspace.h"
+
+typedef struct addrspace addrspace;
+
+#define PAGE_BITS 12
 
 //the structure of frame table entry
 struct frame_table_entry {
@@ -100,11 +99,15 @@ void clean_memory(vaddr_t mem);
 
 /* TLB shootdown handling called from interprocessor_interrupt */
 void vm_tlbshootdown(const struct tlbshootdown *);
-
+void vm_tlbflush(void);
 
 uint32_t hpt_hash(struct addrspace *as, vaddr_t faultaddr);
-uint32_t hpt_find_hash(struct addrspace *as, vaddr_t faultaddr, bool result);
+uint32_t hpt_find_hash(struct addrspace *as, vaddr_t faultaddr, bool *result);
 void hpt_reset(void);
+void clean_frame(paddr_t paddr);
+int hpt_fetch_frame(int index, uint32_t dirty);
+uint32_t hpt_next_free(bool *flag);
+
 
 
 #endif /* _VM_H_ */

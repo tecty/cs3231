@@ -47,15 +47,18 @@ struct vnode;
  *
  * You write this.
  */
+#define USERSTACKSIZE 16*PAGE_SIZE
+
 
 struct region {
         vaddr_t vbase;
         size_t size;
+        size_t npages;
         uint32_t readable;
         uint32_t writeable;
         uint32_t executable; 
+        //link to the next region
         struct region * next;
-
         //this is for recording the original stat of writable
         uint32_t orig_writeable;
 };
@@ -71,10 +74,7 @@ struct addrspace {
         paddr_t as_stackpbase;
 #else
         // addrspace is composed of multiple regions
-        struct region *region regions;
-        // struct region *text_region;
-        // struct region *data_region;
-        // struct region *stack_region;
+        struct region *regions;
 #endif
 };
 

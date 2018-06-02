@@ -49,14 +49,6 @@ void hpt_reset(void){
     }
 }
 
-//function for finding the correct location in hpt
-uint32_t hpt_hash(struct addrspace *as, vaddr_t faultaddr){
-    uint32_t index;
-
-    index = ((uint32_t)as)^(faultaddr >> PAGE_BITS) % hpt_size;
-    return index;
-}
-
 //fetch a free frame to bind with new entry
 int hpt_fetch_frame(int index, uint32_t dirty){
     vaddr_t new_frame = alloc_kpages(1);
@@ -98,26 +90,25 @@ uint32_t hpt_find_hash(struct addrspace *as, vaddr_t faultaddr, bool *result){
     uint32_t prev_no = index;
     //use internal chaining to check the right position for as-faultaddr
     while(hpt[index].pid!=(uint32_t)as || 
-        hpt[index].page_no!= (faultaddr & PAGE_FRAME)){
+        hpt[index].page_no!= faultaddr){
         //should find the next internal chaining
         if((hpt[index].frame_no & TLBLO_VALID) != TLBLO_VALID){
             //hit an invalid page-frame linking 
             //hpt entry not found
             *result = false;
-            return prev_no; 
+            return index; 
         }
-        else if(hpt[index].next == NULL){
+        if(hpt[index].next == NULL){
             //no further internal chaining
             //hpt entry not found
+            prev_no = index;
             *result = false;
             return prev_no;
         }
-        else{
-            //go to next internal chaining to check
-            //iterate
-            prev_no = index;
-            index = (hpt[index].next - hpt)/sizeof(struct page_table_entry);
-        }
+        //go to next internal chaining to check
+        //iterate
+        prev_no = index;
+        index = (hpt[index].next - hpt)/sizeof(struct page_table_entry);
     }
     //quit loop
     //the current entry should have the right index
@@ -181,9 +172,18 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 
     spinlock_acquire(&pt_lock);
     result = hpt_find_hash(as, faultaddress, &found_flag);
-    if(found_flag){
+    if(found_flag){ //found in pagetable
         spinlock_release(&pt_lock);
-        return result; //found in pagetable
+        //Entry high is the virtual addr and ASID
+        entry_hi = hpt[result].page_no;
+        //Entry lo is physical frame, dirty bit and valid bit
+        entry_lo = hpt[result].frame_no;
+
+        /* Disable interrupts on this CPU while frobbing the TLB. */
+        int spl = splhigh();
+        tlb_random(entry_hi, entry_lo);
+        splx(spl);
+        return 0; //found in pagetable
     }
 
     //if not found
@@ -221,7 +221,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
         }
         //otherwise continue
         hpt[next].pid = (uint32_t)as;
-        hpt[next].page_no = faultaddress & PAGE_FRAME;
+        hpt[next].page_no = faultaddress;
         if(result!=next) {
             //there is an internal chaining happen
             //add this new page to the next pointer in the previoud page

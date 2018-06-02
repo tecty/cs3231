@@ -148,7 +148,7 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 			}
 			//otherwise bind the new link
 			hpt[next].pid = (uint32_t)newas;
-			hpt[next].page_no = vbase & PAGE_FRAME;
+			hpt[next].page_no = vbase;
 			//connect to the same frame connected by old addrspace
 			int dirty = paddr & TLBLO_DIRTY;
 			hpt[next].frame_no = paddr | dirty | TLBLO_VALID; 
@@ -257,7 +257,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 
 	//align the region starting by building the base addr
 	memsize += vaddr & ~(vaddr_t)PAGE_FRAME;
-	vaddr &= PAGE_FRAME;
+	// vaddr &= PAGE_FRAME;
 
 	//and build until the end of its mem end
 	memsize = (memsize + PAGE_SIZE - 1) & PAGE_FRAME;

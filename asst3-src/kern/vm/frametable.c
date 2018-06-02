@@ -22,25 +22,44 @@ static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
 
 vaddr_t alloc_kpages(unsigned int npages)
 {
-        /*
-         * IMPLEMENT ME.  You should replace this code with a proper
-         *                implementation.
-         */
+    /*
+        * IMPLEMENT ME.  You should replace this code with a proper
+        *                implementation.
+        */
 
-        paddr_t addr;
+    paddr_t addr;
 
-        spinlock_acquire(&stealmem_lock);
-        addr = ram_stealmem(npages);
-        spinlock_release(&stealmem_lock);
+    spinlock_acquire(&stealmem_lock);
+    // calculate the address for return 
+    addr = frame_start + next_free_frame_id*PAGE_SIZE;
+    // set this page is used 
+    frame_table[next_free_frame_id].status = USED;
 
-        if(addr == 0)
-                return 0;
+    // not able to use steal meml, use frame table to find the slot 
+    unsigned int old_next_free_frame_id = next_free_frame_id;
 
-        return PADDR_TO_KVADDR(addr);
+    
+    // find another page for next allocation
+    next_free_frame_id ++;
+    while(old_next_free_frame_id!= next_free_frame_id){
+        if(frame_table[next_free_frame_id].status== FREE]){
+            // current next free frame is correct
+            break;
+        }
+        next_free_frame_id++;
+    }
+    // TODO: Error handling. 
+
+    spinlock_release(&stealmem_lock);
+
+    if(addr == 0)
+            return 0;
+
+    return PADDR_TO_KVADDR(addr);
 }
 
 void free_kpages(vaddr_t addr)
 {
-        (void) addr;
+    (void) addr;
 }
 

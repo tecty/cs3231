@@ -30,7 +30,6 @@
 #ifndef _MIPS_VM_H_
 #define _MIPS_VM_H_
 
-
 /*
  * Machine-dependent VM system definitions.
  */
@@ -135,5 +134,22 @@ struct tlbshootdown {
 
 #define TLBSHOOTDOWN_MAX 16
 
+enum FRAME_STATUS{
+	USED = 1,
+	FREE = 0
+};
+
+struct frame_slot {
+	enum FRAME_STATUS status;
+};
+
+// store the start of frame table 
+struct frame_slot *frame_table; 
+// next frame is empty in frame table (the index of frame table)
+unsigned int next_free_frame_id;
+// how many frame need to manage
+unsigned int frame_count;
+// the address where the frame is start 
+paddr_t frame_start; 
 
 #endif /* _MIPS_VM_H_ */

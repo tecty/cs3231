@@ -123,44 +123,6 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 			new_regions->next = new_reg;
 		}
 
-		//now add corresponding new page-frame matching in hpt
-		size_t i;
-		for(i=0; i < new_reg->npages; i++){
-			//we first find the hash value of this pid/vaddr binding
-			bool found_flag;
-			//this is the vaddr of the page
-			vaddr_t vbase = ptr->vbase + i * PAGE_SIZE;
-			//find out which frame is bound to the region in old addrspace
-			spinlock_acquire(&as_lock);
-			uint32_t old_result = hpt_find_hash(old, vbase, &found_flag);
-			//found_flag must be true
-			KASSERT(found_flag==true);
-			paddr_t paddr = hpt[old_result].frame_no;
-
-			uint32_t result = hpt_find_hash(newas, vbase, &found_flag);
-			//found_flag must be false because this is a new reg
-			KASSERT(found_flag==false);
-			uint32_t next = hpt_next_free(newas, vbase, &found_flag);
-			if(found_flag==false){
-				//no more page able to save the new region
-				//all generation of newas fails
-				spinlock_release(&as_lock);
-				as_destroy(newas);
-				return ENOMEM;
-			}
-			//otherwise bind the new link
-			hpt[next].pid = (uint32_t)newas;
-			hpt[next].page_no = vbase;
-			//connect to the same frame connected by old addrspace
-			int dirty = paddr & TLBLO_DIRTY;
-			hpt[next].frame_no = paddr | dirty | TLBLO_VALID; 
-			if(result!=next){
-				//there is an internal chaining happen
-				hpt[result].next = &hpt[next];
-			}
-			spinlock_release(&as_lock);
-		}
-
 		//iterate
 		if(new_regions!=newas->regions){ //move to the next region
 			new_regions = new_regions->next;
@@ -168,7 +130,16 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 		ptr = ptr->next;
 	}
 
-	//then add new entry in hpt
+	//create space for all deep copies of pid/page_no/frame_no from old as
+	//now add corresponding new page-frame matching in hpt
+	spinlock_acquire(&as_lock);
+	int res = hpt_copy(old, newas);
+	spinlock_release(&as_lock);
+	if(res){
+		as_destroy(newas);
+		return ENOMEM;
+	}
+
 	*ret = newas;
 	return 0;
 }

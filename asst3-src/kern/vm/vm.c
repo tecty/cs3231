@@ -31,6 +31,37 @@ uint32_t hpt_next_free(struct addrspace *as, vaddr_t faultaddr, bool *flag){
     return index;
 }
 
+//function that create a space to save the deep copies pid/page_no/frame_no from 
+//in old ass to new ass in hpt
+//return 0 if all success
+int hpt_copy(struct addrspace *old_as, struct addrspace *new_as){
+    uint32_t i;
+    for(i = 0; i < hpt_size; i++){
+        bool found_flag;
+        if(hpt[i].pid==(uint32_t)old_as){
+            //this should be a page to copy
+            vaddr_t vaddr = hpt[i].page_no;
+            paddr_t paddr = hpt[i].frame_no;
+            uint32_t new_copy = hpt_find_hash(new_as, vaddr, &found_flag);
+            KASSERT(found_flag==false);
+            uint32_t next = hpt_next_free(new_as, vaddr, &found_flag);
+            if(found_flag==false){
+                //out of page
+                return ENOMEM;
+            }
+            hpt[next].pid = (uint32_t)new_as;
+            hpt[next].page_no = vaddr;
+            int dirty = paddr & TLBLO_DIRTY;
+            hpt[next].frame_no = paddr | dirty | TLBLO_VALID;
+            if(new_copy!=next){
+                //there is an internal chaining happen
+                hpt[new_copy].next = &hpt[next];
+            }
+        }
+    }
+    return 0;
+}
+
 //function for reset all page/frame linking
 void hpt_reset(void){
     KASSERT(hpt!=0); //check the validity of pt

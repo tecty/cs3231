@@ -135,6 +135,7 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	spinlock_acquire(&as_lock);
 	int res = hpt_copy(old, newas);
 	spinlock_release(&as_lock);
+
 	if(res){
 		as_destroy(newas);
 		return ENOMEM;
@@ -159,7 +160,9 @@ as_destroy(struct addrspace *as)
 			//set this block invalid
 			hpt[i].frame_no = hpt[i].frame_no & ~TLBLO_VALID;
 			//check if needs to free the linked frame
+			spinlock_acquire(&as_lock);
 			clean_frame(hpt[i].frame_no);
+			spinlock_release(&as_lock);
 		}
 	}
 	kfree(as);

@@ -3,6 +3,7 @@
 #include <lib.h>
 #include <thread.h>
 #include <spl.h>
+#include <spinlock.h>
 #include <proc.h>
 #include <vm.h>
 #include <machine/tlb.h>
@@ -17,6 +18,7 @@ size_t page_entry_size = sizeof(struct page_table_entry);
 uint32_t hpt_next_free(struct addrspace *as, vaddr_t faultaddr, bool *flag){
     uint32_t index = ((uint32_t)as)^(faultaddr >> PAGE_BITS);
     index %= hpt_size;
+
     while(index < hpt_size){
         //find the first invalid page to be the new page
         if((hpt[index].frame_no & TLBLO_VALID)!= TLBLO_VALID){
@@ -36,6 +38,7 @@ uint32_t hpt_next_free(struct addrspace *as, vaddr_t faultaddr, bool *flag){
 //return 0 if all success
 int hpt_copy(struct addrspace *old_as, struct addrspace *new_as){
     uint32_t i;
+
     for(i = 0; i < hpt_size; i++){
         bool found_flag;
         if(hpt[i].pid==(uint32_t)old_as){
@@ -70,6 +73,7 @@ int hpt_copy(struct addrspace *old_as, struct addrspace *new_as){
             );
         }
     }
+
     return 0;
 }
 
@@ -78,22 +82,24 @@ void hpt_reset(void){
     KASSERT(hpt!=0); //check the validity of pt
     // KASSERT(total_page_num!=0); //check the validity of total page number
     unsigned int num = 0;
+
     while(num < hpt_size){
         //clean
-        spinlock_acquire(&pt_lock);
         //clean all internal chaining
         hpt[num].next = NULL;
         //set all page-frame linking to be invalid
         hpt[num].frame_no &= ~ TLBLO_VALID;
-        spinlock_release(&pt_lock);
         //iterate
         num = num + 1;
     }
+
 }
 
 //fetch a free frame to bind with new entry
 int hpt_fetch_frame(int index, uint32_t dirty){
+
     vaddr_t new_frame = alloc_kpages(1);
+
     if(new_frame == 0){
         return ENOMEM;
     }
@@ -107,6 +113,7 @@ int hpt_fetch_frame(int index, uint32_t dirty){
 void clean_frame(paddr_t paddr){
     bool clean = true;
     uint32_t i;
+
     for(i = 0; i<hpt_size; i++){
         if((hpt[i].frame_no & PAGE_FRAME) == (paddr & PAGE_FRAME)){
             if((hpt[i].frame_no & TLBLO_VALID) == TLBLO_VALID){
@@ -115,6 +122,7 @@ void clean_frame(paddr_t paddr){
             }
         }
     }
+
     if(clean==true){ 
         //no other page table needs this frame, clean it
         free_kpages(PADDR_TO_KVADDR(paddr & PAGE_FRAME));
@@ -131,6 +139,7 @@ uint32_t hpt_find_hash(struct addrspace *as, vaddr_t faultaddr, bool *result){
     //(what is the previous hash number)
     uint32_t prev_no = index;
     //use internal chaining to check the right position for as-faultaddr
+
     while(hpt[index].pid!=(uint32_t)as || 
         hpt[index].page_no!= (faultaddr & PAGE_FRAME)){
         //should find the next internal chaining
@@ -152,6 +161,7 @@ uint32_t hpt_find_hash(struct addrspace *as, vaddr_t faultaddr, bool *result){
         prev_no = index;
         index = (hpt[index].next - hpt)/sizeof(struct page_table_entry);
     }
+
     //quit loop
     //the current entry should have the right index
     paddr_t paddr = hpt[index].frame_no;
@@ -177,12 +187,6 @@ void vm_bootstrap(void)
 int
 vm_fault(int faulttype, vaddr_t faultaddress)
 {
-    // (void) faulttype;
-    // (void) faultaddress;
-
-    // panic("vm_fault hasn't been written yet\n");
-
-    // return EFAULT;	
     //tlb entry high 
     uint32_t entry_hi;
     //tlb entry lo
@@ -211,7 +215,6 @@ vm_fault(int faulttype, vaddr_t faultaddress)
     if(as == NULL){
         return EFAULT;
     }
-
     spinlock_acquire(&pt_lock);
     result = hpt_find_hash(as, faultaddress, &found_flag);
     if(found_flag){ //found in pagetable
@@ -257,8 +260,8 @@ vm_fault(int faulttype, vaddr_t faultaddress)
         //allocate a frame entry
         int ret = hpt_fetch_frame(next, dirty);
         if(ret){
-            //no enough frame memory to allocate
             spinlock_release(&pt_lock);
+            //no enough frame memory to allocate
             return ret;
         }
         //otherwise continue
@@ -269,15 +272,15 @@ vm_fault(int faulttype, vaddr_t faultaddress)
             //add this new page to the next pointer in the previoud page
             hpt[result].next = &hpt[next];
         }
-        spinlock_release(&pt_lock);
     }
     else{
+        spinlock_release(&pt_lock);
         //no enough pagetable mem
         //stop input and return error
-        spinlock_release(&pt_lock);
         return ENOMEM; 
     }
 
+    spinlock_release(&pt_lock);
     //Entry high is the virtual addr and ASID
     entry_hi = hpt[next].page_no & PAGE_FRAME;
     //Entry lo is physical frame, dirty bit and valid bit

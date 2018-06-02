@@ -139,7 +139,6 @@ vaddr_t alloc_kpages(unsigned int npages)
     spinlock_acquire(&stealmem_lock);
     vaddr_t addr = find_next_free_frame();
     spinlock_release(&stealmem_lock);
-
     return addr;
 }
 
@@ -165,7 +164,9 @@ void clean_memory(vaddr_t mem){
     ptr = (void *)mem;
     //clean the memory byte by byte
     //memset(ptr, 0, PAGE_SIZE);
+    spinlock_acquire(&stealmem_lock);
     bzero(ptr, PAGE_SIZE);
+    spinlock_release(&stealmem_lock);
 }
 
 
@@ -176,7 +177,7 @@ void free_kpages(vaddr_t addr)
                         + hpt_used_frame_num;
     ft[pos].stat = FREE;
     clean_memory(ft[pos].mem_addr);    
-    spinlock_acquire(&stealmem_lock);
+    
     if(free_list.count==0){
         //this is the first newly added free frame
         free_list.start = free_list.end = &ft[pos];
@@ -187,7 +188,7 @@ void free_kpages(vaddr_t addr)
         free_list.end = &ft[pos];
     }
     free_list.count = free_list.count + 1;  
-    spinlock_release(&stealmem_lock);
+    
     return;
 }
 

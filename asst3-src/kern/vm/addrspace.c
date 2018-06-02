@@ -114,7 +114,9 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 		//put the new region into the new addrspace
 		if(new_regions == NULL){
 			//at the head of the region list in newas
-			new_regions = new_reg;
+			newas->regions = new_reg;
+			//relocate new_regions
+			new_regions = newas->regions;
 		}
 		else{
 			//not at the head, just add new_reg at the tail of the region list
@@ -160,7 +162,9 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 		}
 
 		//iterate
-		new_regions = new_reg;
+		if(new_regions!=newas->regions){ //move to the next region
+			new_regions = new_regions->next;
+		}
 		ptr = ptr->next;
 	}
 

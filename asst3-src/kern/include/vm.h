@@ -107,6 +107,6 @@ void clean_frame(paddr_t paddr);
 int hpt_fetch_frame(int index, uint32_t dirty);
 uint32_t hpt_next_free(struct addrspace *as, vaddr_t faultaddr, bool *result);
 int hpt_copy(struct addrspace *old_as, struct addrspace *new_as);
-
+void hpt_dirtybit_unset(struct addrspace *as, vaddr_t vaddr);
 
 #endif /* _VM_H_ */

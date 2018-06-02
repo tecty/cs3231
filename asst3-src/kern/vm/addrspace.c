@@ -282,7 +282,7 @@ as_prepare_load(struct addrspace *as)
 	* Write this.
 	*/
 	struct region *cur_reg = as->regions;
-
+	//reset permission
 	while(cur_reg!=NULL){
 		cur_reg->writeable = 1;
 		cur_reg = cur_reg->next;
@@ -303,6 +303,12 @@ as_complete_load(struct addrspace *as)
 	struct region *cur_reg = as->regions;
 	while(cur_reg!=NULL){
 		cur_reg->writeable = cur_reg->orig_writeable;
+		//unset dirty bit
+		if(cur_reg->writeable==0){
+			for(uint32_t num = 0; num < cur_reg->npages; num++){
+				hpt_dirtybit_unset(as, cur_reg->vbase + num*PAGE_SIZE);
+			}
+		}
 		cur_reg = cur_reg->next;
 	}
 

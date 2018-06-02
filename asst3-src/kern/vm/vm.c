@@ -76,6 +76,18 @@ int hpt_copy(struct addrspace *old_as, struct addrspace *new_as){
     return 0;
 }
 
+void hpt_dirtybit_unset(struct addrspace *as, vaddr_t vaddr){
+    uint32_t i;
+    //find all pages linked to old_as and copy them in new_as
+    for(i = 0; i < hpt_size; i++){
+        if(hpt[i].pid==(uint32_t)as && (hpt[i].frame_no & PAGE_FRAME)==(vaddr & PAGE_FRAME)){
+            //this should be a page to copy
+            hpt[i].frame_no = hpt[i].frame_no & ~TLBLO_DIRTY;
+            return;
+        }
+    }
+}
+
 //function for reset all page/frame linking
 void hpt_reset(void){
     KASSERT(hpt!=0); //check the validity of pt

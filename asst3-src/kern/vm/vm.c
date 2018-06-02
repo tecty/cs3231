@@ -16,21 +16,6 @@ static struct spinlock pt_lock = SPINLOCK_INITIALIZER;
 size_t page_entry_size = sizeof(struct page_table_entry);
 
 uint32_t hpt_next_free(struct addrspace *as, vaddr_t faultaddr, bool *result){
-    // uint32_t index = ((uint32_t)as)^(faultaddr >> PAGE_BITS);
-    // index %= hpt_size;
-
-    // while(index < hpt_size){
-    //     //find the first invalid page to be the new page
-    //     if((hpt[index].frame_no & TLBLO_VALID)!= TLBLO_VALID){
-    //         *flag = true;
-    //         return index;
-    //     }
-    //     //iterate
-    //     index = index + 1;
-    // }
-    // //not found
-    // *flag = false;
-    // return index;
     //basic starting hash number
     uint32_t start = ((uint32_t)as)^(faultaddr >> PAGE_BITS);
     start %= hpt_size;
@@ -170,53 +155,6 @@ uint32_t hpt_find_hash(struct addrspace *as, vaddr_t faultaddr, bool *result){
     *result = false;
     return index; //not used
 }
-// //hash and jump collision
-// //check existing hash
-// uint32_t hpt_find_hash(struct addrspace *as, vaddr_t faultaddr, bool *result){
-//     //basic starting hash number
-//     uint32_t index = ((uint32_t)as)^(faultaddr >> PAGE_BITS);
-//     index %= hpt_size;
-//     //prev_no is used to record where the internal chaining is from 
-//     //(what is the previous hash number)
-//     uint32_t prev_no = index;
-//     //use internal chaining to check the right position for as-faultaddr
-
-//     while(hpt[index].pid!=(uint32_t)as || 
-//         hpt[index].page_no!= (faultaddr & PAGE_FRAME)){
-//         //should find the next internal chaining
-//         if((hpt[index].frame_no & TLBLO_VALID) != TLBLO_VALID){
-//             //hit an invalid page-frame linking 
-//             //hpt entry not found
-//             *result = false;
-//             return index; 
-//         }
-//         if(hpt[index].next == NULL){
-//             //no further internal chaining
-//             //hpt entry not found
-//             prev_no = index;
-//             *result = false;
-//             return prev_no;
-//         }
-//         //go to next internal chaining to check
-//         //iterate
-//         prev_no = index;
-//         index = (hpt[index].next - hpt)/sizeof(struct page_table_entry);
-//     }
-
-//     //quit loop
-//     //the current entry should have the right index
-//     paddr_t paddr = hpt[index].frame_no;
-//     //check if it is valid
-//     if((paddr & TLBLO_VALID) == TLBLO_VALID){ //valid
-//         //copy offset from page_no
-//         *result = true;
-//         return index;
-//     }
-//     else{  //this addr is not valid
-//         *result = false;
-//         return prev_no;
-//     }
-// }
 
 void vm_bootstrap(void)
 {

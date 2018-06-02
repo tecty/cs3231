@@ -65,7 +65,6 @@ struct page_table_entry{
     uint32_t pid; //process identifier
     vaddr_t page_no; //page number
     paddr_t frame_no; //frame number 
-    struct page_table_entry * next; //link to handle collisions
 };
 
 //page table entry pointer
@@ -106,7 +105,7 @@ uint32_t hpt_find_hash(struct addrspace *as, vaddr_t faultaddr, bool *result);
 void hpt_reset(void);
 void clean_frame(paddr_t paddr);
 int hpt_fetch_frame(int index, uint32_t dirty);
-uint32_t hpt_next_free(struct addrspace *as, vaddr_t faultaddr, bool *flag);
+uint32_t hpt_next_free(struct addrspace *as, vaddr_t faultaddr, bool *result);
 int hpt_copy(struct addrspace *old_as, struct addrspace *new_as);
 
 

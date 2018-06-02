@@ -15,21 +15,41 @@ static struct spinlock pt_lock = SPINLOCK_INITIALIZER;
 
 size_t page_entry_size = sizeof(struct page_table_entry);
 
-uint32_t hpt_next_free(struct addrspace *as, vaddr_t faultaddr, bool *flag){
-    uint32_t index = ((uint32_t)as)^(faultaddr >> PAGE_BITS);
-    index %= hpt_size;
+uint32_t hpt_next_free(struct addrspace *as, vaddr_t faultaddr, bool *result){
+    // uint32_t index = ((uint32_t)as)^(faultaddr >> PAGE_BITS);
+    // index %= hpt_size;
 
-    while(index < hpt_size){
-        //find the first invalid page to be the new page
-        if((hpt[index].frame_no & TLBLO_VALID)!= TLBLO_VALID){
-            *flag = true;
+    // while(index < hpt_size){
+    //     //find the first invalid page to be the new page
+    //     if((hpt[index].frame_no & TLBLO_VALID)!= TLBLO_VALID){
+    //         *flag = true;
+    //         return index;
+    //     }
+    //     //iterate
+    //     index = index + 1;
+    // }
+    // //not found
+    // *flag = false;
+    // return index;
+    //basic starting hash number
+    uint32_t start = ((uint32_t)as)^(faultaddr >> PAGE_BITS);
+    start %= hpt_size;
+    //iterator
+    uint32_t index = start;
+    do{
+        //check the validity
+        if((hpt[index].frame_no & TLBLO_VALID) != TLBLO_VALID){
+            //this is an invalid/empty binding
+            *result = true;
             return index;
         }
         //iterate
-        index = index + 1;
+        index = (index + 1)%hpt_size;
     }
-    //not found
-    *flag = false;
+    while(index!=start);
+    //quit loop
+    //no page allocatable
+    *result = false;
     return index;
 }
 
@@ -38,36 +58,30 @@ uint32_t hpt_next_free(struct addrspace *as, vaddr_t faultaddr, bool *flag){
 //return 0 if all success
 int hpt_copy(struct addrspace *old_as, struct addrspace *new_as){
     uint32_t i;
-
+    //find all pages linked to old_as and copy them in new_as
     for(i = 0; i < hpt_size; i++){
         bool found_flag;
         if(hpt[i].pid==(uint32_t)old_as){
             //this should be a page to copy
             vaddr_t vaddr = hpt[i].page_no;
             paddr_t paddr = hpt[i].frame_no;
-            uint32_t new_copy = hpt_find_hash(new_as, vaddr, &found_flag);
-            KASSERT(found_flag==false);
-            uint32_t next = hpt_next_free(new_as, vaddr, &found_flag);
+            uint32_t new_copy = hpt_next_free(new_as, vaddr, &found_flag);
             if(found_flag==false){
                 //out of page
                 return ENOMEM;
             }
             //allocate a frame for the new copy
             int dirty = paddr & TLBLO_DIRTY;
-            int ret = hpt_fetch_frame(next, dirty);
+            int ret = hpt_fetch_frame(new_copy, dirty);
             if(ret){
                 //no enough frame memory to allocate
                 return ret;
             }
-            hpt[next].pid = (uint32_t)new_as;
-            hpt[next].page_no = vaddr&PAGE_FRAME;
-            if(new_copy!=next){
-                //there is an internal chaining happen
-                hpt[new_copy].next = &hpt[next];
-            }
+            hpt[new_copy].pid = (uint32_t)new_as;
+            hpt[new_copy].page_no = vaddr&PAGE_FRAME;
             //now move the data from old to new
             memmove(
-                (void *)PADDR_TO_KVADDR(hpt[next].frame_no & PAGE_FRAME), 
+                (void *)PADDR_TO_KVADDR(hpt[new_copy].frame_no & PAGE_FRAME), 
                 (const void *)PADDR_TO_KVADDR(hpt[i].frame_no & PAGE_FRAME),
                 PAGE_SIZE
             );
@@ -85,8 +99,6 @@ void hpt_reset(void){
 
     while(num < hpt_size){
         //clean
-        //clean all internal chaining
-        hpt[num].next = NULL;
         //set all page-frame linking to be invalid
         hpt[num].frame_no &= ~ TLBLO_VALID;
         //iterate
@@ -110,6 +122,7 @@ int hpt_fetch_frame(int index, uint32_t dirty){
 }
 
 //check if the frame can be retrived as free frames in hpt
+//this is only prepared for those processes using the same frame memory
 void clean_frame(paddr_t paddr){
     bool clean = true;
     uint32_t i;
@@ -129,53 +142,81 @@ void clean_frame(paddr_t paddr){
     }
 }
 
-//hash and jump collision
-//check existing hash
+
 uint32_t hpt_find_hash(struct addrspace *as, vaddr_t faultaddr, bool *result){
     //basic starting hash number
-    uint32_t index = ((uint32_t)as)^(faultaddr >> PAGE_BITS);
-    index %= hpt_size;
-    //prev_no is used to record where the internal chaining is from 
-    //(what is the previous hash number)
-    uint32_t prev_no = index;
-    //use internal chaining to check the right position for as-faultaddr
+    uint32_t start = ((uint32_t)as)^(faultaddr >> PAGE_BITS);
+    start %= hpt_size;
+    //iterator
+    uint32_t index = start;
+    do{
+        if(hpt[index].pid==(uint32_t)as &&
+            hpt[index].page_no== (faultaddr & PAGE_FRAME)){
+            //found the right position
+            //check the validity
+            if((hpt[index].frame_no & TLBLO_VALID) == TLBLO_VALID){
+                //this is a valid binding
+                *result = true;
+                return index;
+            }
+        }
 
-    while(hpt[index].pid!=(uint32_t)as || 
-        hpt[index].page_no!= (faultaddr & PAGE_FRAME)){
-        //should find the next internal chaining
-        if((hpt[index].frame_no & TLBLO_VALID) != TLBLO_VALID){
-            //hit an invalid page-frame linking 
-            //hpt entry not found
-            *result = false;
-            return index; 
-        }
-        if(hpt[index].next == NULL){
-            //no further internal chaining
-            //hpt entry not found
-            prev_no = index;
-            *result = false;
-            return prev_no;
-        }
-        //go to next internal chaining to check
         //iterate
-        prev_no = index;
-        index = (hpt[index].next - hpt)/sizeof(struct page_table_entry);
+        index = (index + 1)%hpt_size;
     }
-
+    while(index!=start);
     //quit loop
-    //the current entry should have the right index
-    paddr_t paddr = hpt[index].frame_no;
-    //check if it is valid
-    if((paddr & TLBLO_VALID) == TLBLO_VALID){ //valid
-        //copy offset from page_no
-        *result = true;
-        return index;
-    }
-    else{  //this addr is not valid
-        *result = false;
-        return prev_no;
-    }
+    //must not found
+    *result = false;
+    return index; //not used
 }
+// //hash and jump collision
+// //check existing hash
+// uint32_t hpt_find_hash(struct addrspace *as, vaddr_t faultaddr, bool *result){
+//     //basic starting hash number
+//     uint32_t index = ((uint32_t)as)^(faultaddr >> PAGE_BITS);
+//     index %= hpt_size;
+//     //prev_no is used to record where the internal chaining is from 
+//     //(what is the previous hash number)
+//     uint32_t prev_no = index;
+//     //use internal chaining to check the right position for as-faultaddr
+
+//     while(hpt[index].pid!=(uint32_t)as || 
+//         hpt[index].page_no!= (faultaddr & PAGE_FRAME)){
+//         //should find the next internal chaining
+//         if((hpt[index].frame_no & TLBLO_VALID) != TLBLO_VALID){
+//             //hit an invalid page-frame linking 
+//             //hpt entry not found
+//             *result = false;
+//             return index; 
+//         }
+//         if(hpt[index].next == NULL){
+//             //no further internal chaining
+//             //hpt entry not found
+//             prev_no = index;
+//             *result = false;
+//             return prev_no;
+//         }
+//         //go to next internal chaining to check
+//         //iterate
+//         prev_no = index;
+//         index = (hpt[index].next - hpt)/sizeof(struct page_table_entry);
+//     }
+
+//     //quit loop
+//     //the current entry should have the right index
+//     paddr_t paddr = hpt[index].frame_no;
+//     //check if it is valid
+//     if((paddr & TLBLO_VALID) == TLBLO_VALID){ //valid
+//         //copy offset from page_no
+//         *result = true;
+//         return index;
+//     }
+//     else{  //this addr is not valid
+//         *result = false;
+//         return prev_no;
+//     }
+// }
 
 void vm_bootstrap(void)
 {
@@ -192,7 +233,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
     //tlb entry lo
     uint32_t entry_lo;
     //dirty bit
-    uint32_t dirty = 01;
+    uint32_t dirty = 0;
 
     //flag recording the tlb searching result
     bool found_flag = false;
@@ -215,6 +256,8 @@ vm_fault(int faulttype, vaddr_t faultaddress)
     if(as == NULL){
         return EFAULT;
     }
+
+    //find this faultaddress in pagetable
     spinlock_acquire(&pt_lock);
     result = hpt_find_hash(as, faultaddress, &found_flag);
     if(found_flag){ //found in pagetable
@@ -255,23 +298,18 @@ vm_fault(int faulttype, vaddr_t faultaddress)
         return EFAULT;
     }
     //otherwise we put it into hpt as a new entry
-    uint32_t next = hpt_next_free(as, faultaddress, &found_flag);
+    result = hpt_next_free(as, faultaddress, &found_flag);
     if(found_flag==true){ //find pagetable allocatable
         //allocate a frame entry
-        int ret = hpt_fetch_frame(next, dirty);
+        int ret = hpt_fetch_frame(result, dirty);
         if(ret){
             spinlock_release(&pt_lock);
             //no enough frame memory to allocate
             return ret;
         }
         //otherwise continue
-        hpt[next].pid = (uint32_t)as;
-        hpt[next].page_no = faultaddress & PAGE_FRAME;
-        if(result!=next) {
-            //there is an internal chaining happen
-            //add this new page to the next pointer in the previoud page
-            hpt[result].next = &hpt[next];
-        }
+        hpt[result].pid = (uint32_t)as;
+        hpt[result].page_no = faultaddress & PAGE_FRAME;
     }
     else{
         spinlock_release(&pt_lock);
@@ -282,9 +320,9 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 
     spinlock_release(&pt_lock);
     //Entry high is the virtual addr and ASID
-    entry_hi = hpt[next].page_no & PAGE_FRAME;
+    entry_hi = hpt[result].page_no & PAGE_FRAME;
     //Entry lo is physical frame, dirty bit and valid bit
-    entry_lo = hpt[next].frame_no;
+    entry_lo = hpt[result].frame_no;
 
     /* Disable interrupts on this CPU while frobbing the TLB. */
 	int spl = splhigh();

@@ -75,7 +75,7 @@ typedef struct page_table_entry *page_table;
 //initialize later with ft
 page_table hpt;
 //the size of page table 
-size_t hpt_size;
+uint32_t hpt_size;
 
 #include <machine/vm.h>
 
@@ -106,7 +106,7 @@ uint32_t hpt_find_hash(struct addrspace *as, vaddr_t faultaddr, bool *result);
 void hpt_reset(void);
 void clean_frame(paddr_t paddr);
 int hpt_fetch_frame(int index, uint32_t dirty);
-uint32_t hpt_next_free(bool *flag);
+uint32_t hpt_next_free(struct addrspace *as, vaddr_t faultaddr, bool *flag);
 
 
 

@@ -138,7 +138,7 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 			uint32_t result = hpt_find_hash(newas, vbase, &found_flag);
 			//found_flag must be false because this is a new reg
 			KASSERT(found_flag==false);
-			uint32_t next = hpt_next_free(&found_flag);
+			uint32_t next = hpt_next_free(newas, vbase, &found_flag);
 			if(found_flag==false){
 				//no more page able to save the new region
 				//all generation of newas fails

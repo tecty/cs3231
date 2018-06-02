@@ -14,8 +14,9 @@ static struct spinlock pt_lock = SPINLOCK_INITIALIZER;
 
 size_t page_entry_size = sizeof(struct page_table_entry);
 
-uint32_t hpt_next_free(bool *flag){
-    uint32_t index = 0;
+uint32_t hpt_next_free(struct addrspace *as, vaddr_t faultaddr, bool *flag){
+    uint32_t index = ((uint32_t)as)^(faultaddr >> PAGE_BITS);
+    index %= hpt_size;
     while(index < hpt_size){
         //find the first invalid page to be the new page
         if((hpt[index].frame_no & TLBLO_VALID)!= TLBLO_VALID){
@@ -41,7 +42,7 @@ void hpt_reset(void){
         //clean all internal chaining
         hpt[num].next = NULL;
         //set all page-frame linking to be invalid
-        hpt[num].frame_no = hpt[num].frame_no & PAGE_FRAME;
+        hpt[num].frame_no = hpt[num].frame_no & ~ TLBLO_VALID;
         spinlock_release(&pt_lock);
         //iterate
         num = num + 1;
@@ -90,7 +91,8 @@ void clean_frame(paddr_t paddr){
 //check existing hash
 uint32_t hpt_find_hash(struct addrspace *as, vaddr_t faultaddr, bool *result){
     //basic starting hash number
-    uint32_t index = hpt_hash(as, faultaddr);
+    uint32_t index = ((uint32_t)as)^(faultaddr >> PAGE_BITS);
+    index %= hpt_size;
     //prev_no is used to record where the internal chaining is from 
     //(what is the previous hash number)
     uint32_t prev_no = index;
@@ -153,7 +155,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
     //tlb entry lo
     uint32_t entry_lo;
     //dirty bit
-    uint32_t dirty = 0;
+    uint32_t dirty = 01;
 
     //flag recording the tlb searching result
     bool found_flag = false;
@@ -208,7 +210,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
         return EFAULT;
     }
     //otherwise we put it into hpt as a new entry
-    uint32_t next = hpt_next_free(&found_flag);
+    uint32_t next = hpt_next_free(as, faultaddress, &found_flag);
     if(found_flag==true){ //find pagetable allocatable
         //allocate a frame entry
         int ret = hpt_fetch_frame(next, dirty);

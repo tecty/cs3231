@@ -57,19 +57,26 @@ int hpt_copy(struct addrspace *old_as, struct addrspace *new_as){
             }
             //allocate a frame for the new copy
             int dirty = paddr & TLBLO_DIRTY;
-            int ret = hpt_fetch_frame(new_copy, dirty);
-            if(ret){
-                //no enough frame memory to allocate
-                return ret;
-            }
             hpt[new_copy].pid = (uint32_t)new_as;
             hpt[new_copy].page_no = vaddr&PAGE_FRAME;
-            //now move the data from old to new
-            memmove(
-                (void *)PADDR_TO_KVADDR(hpt[new_copy].frame_no & PAGE_FRAME), 
-                (const void *)PADDR_TO_KVADDR(hpt[i].frame_no & PAGE_FRAME),
-                PAGE_SIZE
-            );
+            if(dirty!=0){
+                //this is a writeable area
+                int ret = hpt_fetch_frame(new_copy, dirty);
+                if(ret){
+                    //no enough frame memory to allocate
+                    return ret;
+                }
+                //now move the data from old to new
+                memmove(
+                    (void *)PADDR_TO_KVADDR(hpt[new_copy].frame_no & PAGE_FRAME), 
+                    (const void *)PADDR_TO_KVADDR(hpt[i].frame_no & PAGE_FRAME),
+                    PAGE_SIZE
+                );
+            }
+            else{ //this is not writeable, just share the frame
+                hpt[new_copy].frame_no = (hpt[i].frame_no & PAGE_FRAME)
+                                        |dirty|TLBLO_VALID;
+            }            
         }
     }
 

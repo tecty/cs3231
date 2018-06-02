@@ -130,12 +130,10 @@ vaddr_t alloc_kpages(unsigned int npages)
         //reset hpt
         hpt_reset(); 
     }
-    else{
-        //assume one page at a time
-        if(npages!=1) return 0;
-        //ft is ready to use
-        //use self-defined allocator
-    }
+    //assume one page at a time
+    if(npages!=1) return 0;
+    //ft is ready to use
+    //use self-defined allocator
     spinlock_acquire(&stealmem_lock);
     vaddr_t addr = find_next_free_frame();
     spinlock_release(&stealmem_lock);

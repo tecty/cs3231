@@ -160,9 +160,9 @@ as_destroy(struct addrspace *as)
 			//set this block invalid
 			hpt[i].frame_no = hpt[i].frame_no & ~TLBLO_VALID;
 			//check if needs to free the linked frame
-			spinlock_acquire(&as_lock);
+			// spinlock_acquire(&as_lock);
 			clean_frame(hpt[i].frame_no);
-			spinlock_release(&as_lock);
+			// spinlock_release(&as_lock);
 		}
 	}
 	kfree(as);

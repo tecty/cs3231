@@ -49,14 +49,25 @@ int hpt_copy(struct addrspace *old_as, struct addrspace *new_as){
                 //out of page
                 return ENOMEM;
             }
-            hpt[next].pid = (uint32_t)new_as;
-            hpt[next].page_no = vaddr;
+            //allocate a frame for the new copy
             int dirty = paddr & TLBLO_DIRTY;
-            hpt[next].frame_no = paddr | dirty | TLBLO_VALID;
+            int ret = hpt_fetch_frame(next, dirty);
+            if(ret){
+                //no enough frame memory to allocate
+                return ret;
+            }
+            hpt[next].pid = (uint32_t)new_as;
+            hpt[next].page_no = vaddr&PAGE_FRAME;
             if(new_copy!=next){
                 //there is an internal chaining happen
                 hpt[new_copy].next = &hpt[next];
             }
+            //now move the data from old to new
+            memmove(
+                (void *)PADDR_TO_KVADDR(hpt[next].frame_no & PAGE_FRAME), 
+                (const void *)PADDR_TO_KVADDR(hpt[i].frame_no & PAGE_FRAME),
+                PAGE_SIZE
+            );
         }
     }
     return 0;

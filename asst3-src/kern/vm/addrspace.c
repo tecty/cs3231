@@ -257,7 +257,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 
 	//align the region starting by building the base addr
 	memsize += vaddr & ~(vaddr_t)PAGE_FRAME;
-	// vaddr &= PAGE_FRAME;
+	vaddr &= PAGE_FRAME;
 
 	//and build until the end of its mem end
 	memsize = (memsize + PAGE_SIZE - 1) & PAGE_FRAME;

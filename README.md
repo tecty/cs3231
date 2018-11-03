@@ -15,7 +15,7 @@ Change to the tf->v0 to retval in the function of split64to32() since if we use 
 Have a try to not open the dir but the .h of type define could not included.
 
 
-#TODOs
+# TODOs
 - [x] TRUNC APPEND in the open (TRUNC is in vfs_open)
 - [x] Errno in the open (Kassert,
 - [ ] oversize file name and path name (assume this is done in vfs_open)
@@ -24,13 +24,13 @@ Have a try to not open the dir but the .h of type define could not included.
 - [x] Open would have third argument when O_CREATE provided in flag. (direct passthrough, no need to care)
 
 
-#Unkown Error
+# Unkown Error
 try to replace copyinstr by copyin in sys__write with Error code 6
 
-#Question
+# Question
 asynchronously of different process to read and write a file using system call
 - No need to care by the followup discuss in https://piazza.com/class/jdwg14qxhhb4kp?cid=209
 
-#No Need to Implement
+# No Need to Implement
 - file premission control
 - Symboliic link
